@@ -1,4 +1,5 @@
 using DailyRentalHomes.Api.Contracts.Auth;
+using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -14,16 +15,21 @@ namespace DailyRentalHomes.Api.Controllers;
 public sealed class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IMessageSender _messageSender;
 
-    public AuthController(AppDbContext db)
+    public AuthController(AppDbContext db, IMessageSender messageSender)
     {
         _db = db;
+        _messageSender = messageSender;
     }
 
     [HttpPost("send")]
     public async Task<IActionResult> Send(PhoneInput input, CancellationToken cancellationToken)
     {
         var pin = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+        var text = $"Daily Rental Homes PIN: {pin}";
+        var providerId = await _messageSender.SendAsync(MessageChannel.WhatsApp, input.Phone, text, cancellationToken);
+
         var item = new OtpCode
         {
             PhoneNumber = input.Phone,
@@ -31,7 +37,18 @@ public sealed class AuthController : ControllerBase
             ExpiresAt = DateTime.UtcNow.AddMinutes(5)
         };
 
+        var message = new OutboundMessage
+        {
+            Channel = MessageChannel.WhatsApp,
+            Status = MessageStatus.Sent,
+            To = input.Phone,
+            Text = text,
+            ProviderMessageId = providerId,
+            SentAt = DateTime.UtcNow
+        };
+
         _db.OtpCodes.Add(item);
+        _db.OutboundMessages.Add(message);
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(new { devPin = pin });
