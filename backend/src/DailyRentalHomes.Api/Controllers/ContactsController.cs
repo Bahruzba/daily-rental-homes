@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Contacts;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -20,18 +21,23 @@ public sealed class ContactsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.RelatedContacts.AsNoTracking().ToListAsync(cancellationToken);
-        return Ok(items);
+        var items = await _db.RelatedContacts.AsNoTracking().Where(x => !x.IsDeleted).ToListAsync(cancellationToken);
+        return Ok(ApiResponse<object>.Ok(items));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(NewContactRequest request, CancellationToken cancellationToken)
     {
+        if (request.RentalHomeId <= 0 || TextRules.Empty(request.Value))
+        {
+            return BadRequest(ApiResponse<object>.Fail("Rental home and contact value are required."));
+        }
+
         var contact = new RelatedContact
         {
             RentalHomeId = request.RentalHomeId,
-            FullName = request.FullName,
-            Value = request.Value,
+            FullName = TextRules.Empty(request.FullName) ? "Contact" : TextRules.Clean(request.FullName),
+            Value = TextRules.Clean(request.Value),
             ContactType = request.ContactType,
             NotifyEnabled = request.NotifyEnabled
         };
@@ -39,6 +45,22 @@ public sealed class ContactsController : ControllerBase
         _db.RelatedContacts.Add(contact);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(contact.Id);
+        return Ok(ApiResponse<object>.Ok(new { contact.Id }));
+    }
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
+    {
+        var contact = await _db.RelatedContacts.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (contact is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Contact not found."));
+        }
+
+        contact.IsDeleted = true;
+        contact.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<object>.Ok(new { contact.Id }));
     }
 }
