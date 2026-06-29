@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.MediaFiles;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -20,21 +21,26 @@ public sealed class MediaFilesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.MediaFiles.AsNoTracking().ToListAsync(cancellationToken);
-        return Ok(items);
+        var items = await _db.MediaFiles.AsNoTracking().Where(x => !x.IsDeleted).ToListAsync(cancellationToken);
+        return Ok(ApiResponse<object>.Ok(items));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(NewMediaFileRequest request, CancellationToken cancellationToken)
     {
+        if (TextRules.Empty(request.FileName) || TextRules.Empty(request.FileUrl))
+        {
+            return BadRequest(ApiResponse<object>.Fail("File name and url are required."));
+        }
+
         var file = new MediaFile
         {
             RentalHomeId = request.RentalHomeId,
             BookingDepositId = request.BookingDepositId,
             FileType = request.FileType,
-            FileName = request.FileName,
-            FileUrl = request.FileUrl,
-            ContentType = request.ContentType,
+            FileName = TextRules.Clean(request.FileName),
+            FileUrl = TextRules.Clean(request.FileUrl),
+            ContentType = TextRules.CleanOptional(request.ContentType),
             SizeBytes = request.SizeBytes,
             SortOrder = request.SortOrder
         };
@@ -42,6 +48,22 @@ public sealed class MediaFilesController : ControllerBase
         _db.MediaFiles.Add(file);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(file.Id);
+        return Ok(ApiResponse<object>.Ok(new { file.Id }));
+    }
+
+    [HttpDelete("{id:long}")]
+    public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
+    {
+        var file = await _db.MediaFiles.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (file is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Media file not found."));
+        }
+
+        file.IsDeleted = true;
+        file.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<object>.Ok(new { file.Id }));
     }
 }
