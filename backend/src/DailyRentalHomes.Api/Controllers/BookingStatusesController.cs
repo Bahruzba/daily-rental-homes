@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,7 @@ public sealed class BookingStatusesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.BookingStatuses.AsNoTracking().OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
-        return Ok(items);
+        var items = await _db.BookingStatuses.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
+        return Ok(ApiResponse<object>.Ok(items));
     }
 }
