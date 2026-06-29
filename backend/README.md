@@ -36,4 +36,41 @@ DailyRentalHomes
 
 ## EF Core Code First
 
-Migration commands will be added after the first compile check.
+Install EF tool:
+
+```bash
+dotnet tool install --global dotnet-ef
+```
+
+Create migration:
+
+```bash
+dotnet ef migrations add InitialCreate --project src/DailyRentalHomes.Infrastructure --startup-project src/DailyRentalHomes.Api
+```
+
+Update database:
+
+```bash
+dotnet ef database update --project src/DailyRentalHomes.Infrastructure --startup-project src/DailyRentalHomes.Api
+```
+
+## MVP Endpoints
+
+- GET /api/health
+- POST /api/auth/send
+- POST /api/auth/confirm
+- GET /api/rental-homes
+- POST /api/rental-homes
+- GET /api/bookings
+- POST /api/bookings
+- GET /api/deposits
+- POST /api/deposits
+- GET /api/payment-cards
+- POST /api/payment-cards
+- GET /api/media-files
+- POST /api/media-files
+- GET /api/contacts
+- POST /api/contacts
+- GET /api/amenities
+- POST /api/amenities
+- GET /api/booking-statuses
