@@ -25,6 +25,13 @@ public sealed class DepositsController : ControllerBase
         return Ok(items);
     }
 
+    [HttpGet("{id:long}")]
+    public async Task<IActionResult> GetById(long id, CancellationToken cancellationToken)
+    {
+        var item = await _db.BookingDeposits.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        return item is null ? NotFound() : Ok(item);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(NewDepositRequest request, CancellationToken cancellationToken)
     {
