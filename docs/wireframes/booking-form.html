@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wireframe â€” Rezervasiya formu</title>
+  <link rel="stylesheet" href="wireframe.css">
+</head>
+<body>
+  <header class="header"><div class="shell header-row"><a class="brand" href="#">Daily<span>Homes</span></a><span class="muted" style="margin-left:auto">TÉ™hlÃ¼kÉ™siz rezervasiya sorÄŸusu</span></div></header>
+  <main class="section">
+    <div class="shell">
+      <p class="muted">â† EvÉ™ geri qayÄ±t</p><div class="eyebrow">Rezervasiya sorÄŸusu</div><h1 style="font-size:38px">TarixlÉ™ri vÉ™ É™laqÉ™ mÉ™lumatlarÄ±nÄ± daxil edin</h1>
+      <div class="form-layout">
+        <form class="stack">
+          <section class="panel">
+            <h2>1. Rezervasiya tarixlÉ™ri</h2><p class="muted">HÉ™r uyÄŸun gÃ¼nÃ¼ ayrÄ±ca seÃ§in. SeÃ§ilmiÅŸ gÃ¼nlÉ™r aÅŸaÄŸÄ±da gÃ¶rÃ¼nÉ™cÉ™k.</p>
+            <div class="section-head"><button class="button" type="button">â†</button><strong>Ä°yul 2026</strong><button class="button" type="button">â†’</button></div>
+            <div class="date-grid" aria-label="Tarix seÃ§imi"><span class="date">1</span><span class="date">2</span><span class="date">3</span><span class="date">4</span><span class="date">5</span><span class="date">6</span><span class="date">7</span><span class="date">8</span><span class="date">9</span><span class="date">10</span><span class="date">11</span><span class="date selected">12</span><span class="date selected">13</span><span class="date selected">14</span></div>
+            <div class="divider"></div><strong>SeÃ§ilmiÅŸ tarixlÉ™r</strong><div class="filter-row"><span class="chip active">12 iyul Ã—</span><span class="chip active">13 iyul Ã—</span><span class="chip active">14 iyul Ã—</span></div>
+          </section>
+
+          <section class="panel"><h2>2. Qonaqlar</h2><div class="field"><label for="guest-count">Qonaq sayÄ±</label><select id="guest-count"><option>4 qonaq</option></select><small class="muted">Bu evdÉ™ maksimum 6 qonaq qala bilÉ™r.</small></div></section>
+
+          <section class="panel"><h2>3. ÆlaqÉ™ mÉ™lumatlarÄ±</h2><div class="form-grid"><div class="field"><label for="name">Ad vÉ™ soyad</label><input id="name" placeholder="MÉ™sÉ™lÉ™n, Aysel MÉ™mmÉ™dova"></div><div class="field"><label for="phone">Telefon nÃ¶mrÉ™si</label><input id="phone" placeholder="+994 50 000 00 00"></div></div><div class="field" style="margin-top:14px"><label for="note">Broker Ã¼Ã§Ã¼n qeyd (istÉ™yÉ™ baÄŸlÄ±)</label><textarea id="note" placeholder="GÉ™liÅŸ vaxtÄ± vÉ™ ya É™lavÉ™ sualÄ±nÄ±z"></textarea></div></section>
+        </form>
+
+        <aside class="panel sticky">
+          <h3>Hovuzlu baÄŸ evi</h3><p class="muted">QÉ™bÉ™lÉ™, VÉ™ndam</p><div class="image-box" style="min-height:150px">EV ÅžÆKLÄ°</div><div class="divider"></div>
+          <div class="summary-row"><span>SeÃ§ilmiÅŸ tarixlÉ™r</span><strong>3 gÃ¼n</strong></div><div class="summary-row"><span>GecÉ™lik qiymÉ™t</span><span>120 â‚¼</span></div><div class="summary-row total"><span>CÉ™mi</span><span>360 â‚¼</span></div>
+          <div class="notice" style="margin:16px 0">Beh tÉ™lÉ™b olunarsa mÉ™blÉ™ÄŸ vÉ™ son tarix broker tÉ™sdiqindÉ™n sonra gÃ¶stÉ™rilÉ™cÉ™k.</div>
+          <label style="display:flex;gap:9px;font-size:13px"><input type="checkbox" style="width:auto;min-height:auto"> MÉ™lumatlarÄ±mÄ±n rezervasiya Ã¼Ã§Ã¼n brokerÉ™ gÃ¶ndÉ™rilmÉ™sini qÉ™bul edirÉ™m.</label>
+          <button class="button primary full" type="button" style="margin-top:16px">SorÄŸunu tÉ™sdiqlÉ™</button>
+        </aside>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
+
