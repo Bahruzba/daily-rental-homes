@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.RentalHomes;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -20,8 +21,13 @@ public sealed class RentalHomesController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.RentalHomes.AsNoTracking().ToListAsync(cancellationToken);
-        return Ok(items);
+        var items = await _db.RentalHomes
+            .AsNoTracking()
+            .OrderByDescending(x => x.Id)
+            .Select(x => new RentalHomeResponse(x.Id, x.Title, x.City, x.District, x.DailyPrice, x.RoomCount, x.GuestCount, x.IsPublished))
+            .ToListAsync(cancellationToken);
+
+        return Ok(ApiResponse<object>.Ok(items));
     }
 
     [HttpGet("{id:long}")]
@@ -33,20 +39,25 @@ public sealed class RentalHomesController : ControllerBase
             .Include(x => x.Contacts)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-        return item is null ? NotFound() : Ok(item);
+        return item is null ? NotFound(ApiResponse<object>.Fail("Rental home not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(CreateRentalHomeRequest request, CancellationToken cancellationToken)
     {
+        if (TextRules.Empty(request.Title) || TextRules.Empty(request.City) || request.DailyPrice <= 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Title, city and positive daily price are required."));
+        }
+
         var home = new RentalHome
         {
             BrokerUserId = request.BrokerUserId,
-            Title = request.Title,
-            Description = request.Description,
-            City = request.City,
-            District = request.District,
-            Address = request.Address,
+            Title = TextRules.Clean(request.Title),
+            Description = TextRules.Clean(request.Description),
+            City = TextRules.Clean(request.City),
+            District = TextRules.CleanOptional(request.District),
+            Address = TextRules.CleanOptional(request.Address),
             DailyPrice = request.DailyPrice,
             RoomCount = request.RoomCount,
             GuestCount = request.GuestCount
@@ -55,6 +66,6 @@ public sealed class RentalHomesController : ControllerBase
         _db.RentalHomes.Add(home);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(home.Id);
+        return Ok(ApiResponse<object>.Ok(new { home.Id }));
     }
 }
