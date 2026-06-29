@@ -1,4 +1,4 @@
-# Frontend Design Plan â€” Daily Rental Homes
+# Frontend Design Plan — Daily Rental Homes
 
 ## Purpose and scope
 
@@ -46,10 +46,10 @@ Rules:
 
 - Recommended future UI family: **Manrope** or **Inter**, with system sans-serif fallback.
 - Wireframes use the system font stack and require no external assets.
-- Body text: 16 px desktop, 15â€“16 px mobile, line height 1.5â€“1.65.
-- Page title: 32â€“40 px desktop, 26â€“30 px mobile.
-- Section title: 22â€“28 px desktop, 20â€“24 px mobile.
-- Labels and metadata: 13â€“14 px, never below 12 px.
+- Body text: 16 px desktop, 15–16 px mobile, line height 1.5–1.65.
+- Page title: 32–40 px desktop, 26–30 px mobile.
+- Section title: 22–28 px desktop, 20–24 px mobile.
+- Labels and metadata: 13–14 px, never below 12 px.
 - Prices use semibold or bold weight and tabular numerals where available.
 - Avoid uppercase paragraphs. Uppercase may be used only for compact eyebrow labels.
 
@@ -57,21 +57,21 @@ Rules:
 
 ### Public/customer MVP
 
-1. **Home / rental search** â€” featured or recent homes, simple filters, listing grid.
-2. **Search results** â€” same listing system with filter drawer, result count, and sort.
-3. **Rental detail** â€” gallery, facts, amenities, contacts, price, and booking action.
-4. **Booking form** â€” selected date list, customer information, summary, and confirmation.
-5. **Booking submitted** â€” reference number and next-step explanation.
-6. **Shared booking/deposit status** â€” booking status, deposit deadline, masked card information, and receipt upload when enabled.
-7. **OTP sign-in** â€” phone number, code confirmation, and resend state.
-8. **Not found / unavailable rental** â€” clear recovery action back to available homes.
+1. **Home / rental search** — featured or recent homes, simple filters, listing grid.
+2. **Search results** — same listing system with filter drawer, result count, and sort.
+3. **Rental detail** — gallery, facts, amenities, contacts, price, and booking action.
+4. **Booking form** — selected date list, customer information, summary, and confirmation.
+5. **Booking submitted** — reference number and next-step explanation.
+6. **Shared booking/deposit status** — booking status, deposit deadline, masked card information, and receipt upload when enabled.
+7. **OTP sign-in** — phone number, code confirmation, and resend state.
+8. **Not found / unavailable rental** — clear recovery action back to available homes.
 
 ### Broker/admin placeholders
 
-9. **Broker dashboard** â€” summary, recent bookings, deposit alerts, and managed homes.
-10. **Home management placeholder** â€” list/create/edit entry points.
-11. **Booking management placeholder** â€” filters, status changes, and history entry points.
-12. **Admin placeholder** â€” brokers, dictionaries, all homes, bookings, and operational summaries.
+9. **Broker dashboard** — summary, recent bookings, deposit alerts, and managed homes.
+10. **Home management placeholder** — list/create/edit entry points.
+11. **Booking management placeholder** — filters, status changes, and history entry points.
+12. **Admin placeholder** — brokers, dictionaries, all homes, bookings, and operational summaries.
 
 ## 5. Component list
 
@@ -93,7 +93,7 @@ Rules:
 - Guest count stepper
 - Price range fields
 - Amenity chips
-- Expandable â€œMore filtersâ€ panel
+- Expandable “More filters” panel
 - Active filter chips with clear-all action
 - Result count and sort select
 
@@ -102,7 +102,7 @@ Rules:
 - Rental card
 - Image placeholder/gallery
 - Favourite icon placeholder
-- Price label (`120 â‚¼ / gecÉ™`)
+- Price label (`120 ₼ / gecə`)
 - Location row
 - Facts row (room, guest, optional pool/parking)
 - Amenity chip/list
@@ -135,12 +135,12 @@ Rules:
 
 Desktop order:
 
-1. **Header:** wordmark, `EvlÉ™r`, `NecÉ™ iÅŸlÉ™yir?`, `Daxil ol`, and primary `Elan É™lavÉ™ et` action for authenticated brokers.
+1. **Header:** wordmark, `Evlər`, `Necə işləyir?`, `Daxil ol`, and primary `Elan əlavə et` action for authenticated brokers.
 2. **Hero/search area:** short heading, one supporting line, and a high-contrast search panel.
 3. **Primary filters:** location, dates, guests, and `Axtar` button.
-4. **Secondary filters:** price, room count, and amenities inside `Daha Ã§ox filtr`.
+4. **Secondary filters:** price, room count, and amenities inside `Daha çox filtr`.
 5. **Recent/available homes:** section title, result count, and 3-column card grid.
-6. **Trust strip:** simple three-step explanation â€” choose, request, confirm.
+6. **Trust strip:** simple three-step explanation — choose, request, confirm.
 7. **Footer:** contact, help, privacy, and language links.
 
 The homepage should not begin with a large promotional carousel. The search action and first rentals must be visible quickly.
@@ -150,11 +150,11 @@ The homepage should not begin with a large promotional carousel. The search acti
 Card hierarchy:
 
 1. 4:3 image area with favourite action and optional `Yeni`/`Populyar` badge.
-2. Price on the first content row: `120 â‚¼ / gecÉ™`.
+2. Price on the first content row: `120 ₼ / gecə`.
 3. Short rental title, maximum two lines.
 4. Location: city and district.
 5. Compact facts: room count and guest capacity.
-6. One optional feature line: for example `Hovuz Â· Manqal Â· Wi-Fi`.
+6. One optional feature line: for example `Hovuz · Manqal · Wi-Fi`.
 
 Interaction rules:
 
@@ -181,7 +181,7 @@ Desktop layout:
   - date-list picker;
   - guest count;
   - estimated total;
-  - primary `Rezervasiya sorÄŸusu gÃ¶ndÉ™r` button;
+  - primary `Rezervasiya sorğusu göndər` button;
   - WhatsApp/phone secondary actions.
 
 The API stores booking dates as individual rows, so the UI must show a visible list of selected dates. A continuous check-in/check-out range may be offered as a convenience later, but it must resolve to and display the actual selected date list.
@@ -195,7 +195,7 @@ Use a focused single-column form with a summary panel on desktop. Recommended st
 3. **Contact:** full name, phone number, and optional note.
 4. **Summary:** rental, selected nights/dates, daily price, total, and deposit explanation if applicable.
 5. **Consent and submit:** short data/communication note and one primary action.
-6. **Confirmation:** booking reference and `SorÄŸunuz brokerÉ™ gÃ¶ndÉ™rildi` message.
+6. **Confirmation:** booking reference and `Sorğunuz brokerə göndərildi` message.
 
 Validation must appear beside the field and in plain Azerbaijani. Keep entered values after a recoverable error.
 
@@ -205,20 +205,20 @@ The placeholder demonstrates information architecture only; it is not a full das
 
 Desktop:
 
-- Left navigation: `Ä°cmal`, `EvlÉ™rim`, `Rezervasiyalar`, `Beh Ã¶dÉ™niÅŸlÉ™ri`, `Mesajlar`.
+- Left navigation: `İcmal`, `Evlərim`, `Rezervasiyalar`, `Beh ödənişləri`, `Mesajlar`.
 - Top bar: current role, notifications placeholder, profile menu.
 - KPI row: active homes, pending bookings, waiting deposits, deadlines in 24 hours.
 - Main area: recent booking table and deadline alert panel.
-- Primary action: `Yeni ev É™lavÉ™ et`.
+- Primary action: `Yeni ev əlavə et`.
 
-Admin may later receive additional entries: `BrokerlÉ™r`, `Statuslar`, `RahatlÄ±qlar`, and system-wide reports. Broker and admin remain separate roles and should not be merged into a single ambiguous experience.
+Admin may later receive additional entries: `Brokerlər`, `Statuslar`, `Rahatlıqlar`, and system-wide reports. Broker and admin remain separate roles and should not be merged into a single ambiguous experience.
 
 ## 11. Mobile responsive behavior
 
 - Breakpoints are implementation details; design around approximately 360, 768, and 1200 px widths.
 - Header collapses to wordmark, favourites/profile icon, and menu button.
 - Search fields stack; the primary `Axtar` button remains full width.
-- Advanced filters open in a full-height bottom sheet/drawer with `TÉ™mizlÉ™` and `NÉ™ticÉ™lÉ™ri gÃ¶stÉ™r` actions.
+- Advanced filters open in a full-height bottom sheet/drawer with `Təmizlə` and `Nəticələri göstər` actions.
 - Listing grid becomes one column; cards retain 4:3 images.
 - Detail gallery becomes horizontally swipeable.
 - Detail booking side card becomes a sticky bottom bar showing price and `Rezervasiya` action; the full form opens on its own page or sheet.
@@ -231,69 +231,69 @@ Admin may later receive additional entries: `BrokerlÉ™r`, `Statuslar`, `Rahat
 
 ### Navigation and search
 
-- `EvlÉ™r`
-- `NecÉ™ iÅŸlÉ™yir?`
-- `SeÃ§ilmiÅŸlÉ™r`
+- `Evlər`
+- `Necə işləyir?`
+- `Seçilmişlər`
 - `Daxil ol`
-- `Elan É™lavÉ™ et`
-- `Hara getmÉ™k istÉ™yirsiniz?`
-- `ÅžÉ™hÉ™r vÉ™ ya rayon seÃ§in`
-- `TarixlÉ™ri seÃ§in`
-- `Qonaq sayÄ±`
-- `Daha Ã§ox filtr`
-- `FiltrlÉ™ri tÉ™mizlÉ™`
+- `Elan əlavə et`
+- `Hara getmək istəyirsiniz?`
+- `Şəhər və ya rayon seçin`
+- `Tarixləri seçin`
+- `Qonaq sayı`
+- `Daha çox filtr`
+- `Filtrləri təmizlə`
 - `Axtar`
-- `24 uyÄŸun ev tapÄ±ldÄ±`
+- `24 uyğun ev tapıldı`
 
 ### Rental card/detail
 
-- `120 â‚¼ / gecÉ™`
-- `QÉ™bÉ™lÉ™, VÉ™ndam`
+- `120 ₼ / gecə`
+- `Qəbələ, Vəndam`
 - `3 otaq`
 - `6 qonaq`
-- `BÃ¼tÃ¼n rahatlÄ±qlar`
-- `Ev haqqÄ±nda`
-- `MÉ™kan`
-- `BrokerlÉ™ É™laqÉ™`
+- `Bütün rahatlıqlar`
+- `Ev haqqında`
+- `Məkan`
+- `Brokerlə əlaqə`
 - `WhatsApp-da yaz`
-- `ZÉ™ng et`
-- `Rezervasiya sorÄŸusu gÃ¶ndÉ™r`
+- `Zəng et`
+- `Rezervasiya sorğusu göndər`
 
 ### Booking
 
-- `Rezervasiya tarixlÉ™ri`
-- `SeÃ§ilmiÅŸ tarixlÉ™r`
-- `Tarix É™lavÉ™ et`
-- `Ad vÉ™ soyad`
-- `Telefon nÃ¶mrÉ™si`
-- `Broker Ã¼Ã§Ã¼n qeyd (istÉ™yÉ™ baÄŸlÄ±)`
-- `QiymÉ™t xÃ¼lasÉ™si`
-- `SorÄŸunu tÉ™sdiqlÉ™`
-- `SorÄŸunuz brokerÉ™ gÃ¶ndÉ™rildi`
-- `Broker sorÄŸunu yoxladÄ±qdan sonra sizinlÉ™ É™laqÉ™ saxlayacaq.`
-- `Bu tarix artÄ±q seÃ§ilib.`
-- `Æn azÄ± bir tarix seÃ§in.`
+- `Rezervasiya tarixləri`
+- `Seçilmiş tarixlər`
+- `Tarix əlavə et`
+- `Ad və soyad`
+- `Telefon nömrəsi`
+- `Broker üçün qeyd (istəyə bağlı)`
+- `Qiymət xülasəsi`
+- `Sorğunu təsdiqlə`
+- `Sorğunuz brokerə göndərildi`
+- `Broker sorğunu yoxladıqdan sonra sizinlə əlaqə saxlayacaq.`
+- `Bu tarix artıq seçilib.`
+- `Ən azı bir tarix seçin.`
 
 ### Deposit/status
 
-- `Beh gÃ¶zlÉ™nilir`
-- `Son Ã¶dÉ™niÅŸ vaxtÄ±`
+- `Beh gözlənilir`
+- `Son ödəniş vaxtı`
 - `Kart: **** **** **** 1234`
-- `QÉ™bzi yÃ¼klÉ™`
-- `Ã–dÉ™niÅŸ yoxlanÄ±lÄ±r`
-- `Rezervasiya tÉ™sdiqlÉ™ndi`
-- `LÉ™ÄŸv edildi`
+- `Qəbzi yüklə`
+- `Ödəniş yoxlanılır`
+- `Rezervasiya təsdiqləndi`
+- `Ləğv edildi`
 
 ### Broker/admin
 
-- `Ä°cmal`
-- `EvlÉ™rim`
-- `GÃ¶zlÉ™yÉ™n rezervasiyalar`
-- `Beh Ã¶dÉ™niÅŸlÉ™ri`
-- `Son 24 saatda bitÉ™n mÃ¼ddÉ™tlÉ™r`
-- `Statusu dÉ™yiÅŸ`
-- `MÃ¼ddÉ™ti uzat`
-- `Yeni ev É™lavÉ™ et`
+- `İcmal`
+- `Evlərim`
+- `Gözləyən rezervasiyalar`
+- `Beh ödənişləri`
+- `Son 24 saatda bitən müddətlər`
+- `Statusu dəyiş`
+- `Müddəti uzat`
+- `Yeni ev əlavə et`
 
 ## Wireframe files
 
