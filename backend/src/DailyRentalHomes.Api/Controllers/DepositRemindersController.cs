@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,6 @@ public sealed class DepositRemindersController : ControllerBase
             .OrderBy(x => x.DeadlineAt)
             .ToListAsync(cancellationToken);
 
-        return Ok(items);
+        return Ok(ApiResponse<object>.Ok(items));
     }
 }
