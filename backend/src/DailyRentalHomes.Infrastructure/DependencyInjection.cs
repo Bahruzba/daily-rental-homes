@@ -1,4 +1,6 @@
+using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Application.Abstractions.Persistence;
+using DailyRentalHomes.Infrastructure.Messaging;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +20,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+        services.AddScoped<IMessageSender, DevelopmentMessageSender>();
 
         return services;
     }
