@@ -50,4 +50,25 @@ public sealed class DepositsController : ControllerBase
 
         return Ok(deposit.Id);
     }
+
+    [HttpPost("{id:long}/status")]
+    public async Task<IActionResult> UpdateStatus(long id, UpdateDepositStatusInput input, CancellationToken cancellationToken)
+    {
+        var deposit = await _db.BookingDeposits.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (deposit is null)
+        {
+            return NotFound();
+        }
+
+        deposit.Status = input.Status;
+        deposit.Note = input.Note ?? deposit.Note;
+
+        if (input.Status == BookingDepositStatus.Paid)
+        {
+            deposit.PaidAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok();
+    }
 }
