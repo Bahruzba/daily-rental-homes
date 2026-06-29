@@ -23,6 +23,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<BookingStatus> BookingStatuses => Set<BookingStatus>();
     public DbSet<BookingStatusHistory> BookingStatusHistory => Set<BookingStatusHistory>();
     public DbSet<PaymentCard> PaymentCards => Set<PaymentCard>();
+    public DbSet<OutboundMessage> OutboundMessages => Set<OutboundMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
