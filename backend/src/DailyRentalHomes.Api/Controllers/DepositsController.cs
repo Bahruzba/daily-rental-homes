@@ -1,4 +1,5 @@
 using DailyRentalHomes.Api.Contracts.Deposits;
+using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -12,10 +13,12 @@ namespace DailyRentalHomes.Api.Controllers;
 public sealed class DepositsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IMessageSender _messageSender;
 
-    public DepositsController(AppDbContext db)
+    public DepositsController(AppDbContext db, IMessageSender messageSender)
     {
         _db = db;
+        _messageSender = messageSender;
     }
 
     [HttpGet]
@@ -70,5 +73,35 @@ public sealed class DepositsController : ControllerBase
 
         await _db.SaveChangesAsync(cancellationToken);
         return Ok();
+    }
+
+    [HttpPost("{id:long}/reminder")]
+    public async Task<IActionResult> SendReminder(long id, SendDepositReminderInput input, CancellationToken cancellationToken)
+    {
+        var deposit = await _db.BookingDeposits.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (deposit is null)
+        {
+            return NotFound();
+        }
+
+        var text = input.CustomText ?? $"Beh odenisi ucun mebleg: {deposit.Amount} AZN. Zehmet olmasa vaxtinda gonderin.";
+        var providerId = await _messageSender.SendAsync(MessageChannel.WhatsApp, input.To, text, cancellationToken);
+
+        var message = new OutboundMessage
+        {
+            Channel = MessageChannel.WhatsApp,
+            Status = MessageStatus.Sent,
+            To = input.To,
+            Text = text,
+            ProviderMessageId = providerId,
+            SentAt = DateTime.UtcNow,
+            BookingId = deposit.BookingId,
+            BookingDepositId = deposit.Id
+        };
+
+        _db.OutboundMessages.Add(message);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(message.Id);
     }
 }
