@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Infrastructure;
 using DailyRentalHomes.Infrastructure.Persistence;
 
@@ -6,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<AccessTokenBuilder>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
