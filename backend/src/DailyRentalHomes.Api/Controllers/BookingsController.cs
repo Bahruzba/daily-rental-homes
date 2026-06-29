@@ -1,3 +1,4 @@
+using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Bookings;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -20,8 +21,8 @@ public sealed class BookingsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.Bookings.AsNoTracking().ToListAsync(cancellationToken);
-        return Ok(items);
+        var items = await _db.Bookings.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync(cancellationToken);
+        return Ok(ApiResponse<object>.Ok(items));
     }
 
     [HttpGet("{id:long}")]
@@ -33,25 +34,30 @@ public sealed class BookingsController : ControllerBase
             .Include(x => x.Deposit)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-        return item is null ? NotFound() : Ok(item);
+        return item is null ? NotFound(ApiResponse<object>.Fail("Booking not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
 
     [HttpPost]
     public async Task<IActionResult> Create(NewBookingRequest request, CancellationToken cancellationToken)
     {
+        if (TextRules.Empty(request.Name) || TextRules.Empty(request.Phone) || request.Price <= 0 || request.Dates.Count == 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Name, phone, price and dates are required."));
+        }
+
         var booking = new Booking
         {
             RentalHomeId = request.RentalHomeId,
-            CustomerFullName = request.Name,
-            CustomerPhoneNumber = request.Phone,
+            CustomerFullName = TextRules.Clean(request.Name),
+            CustomerPhoneNumber = TextRules.Clean(request.Phone),
             GuestCount = request.Guests,
             DailyPrice = request.Price,
             TotalAmount = request.Price * request.Dates.Count,
             StatusId = 1,
-            CustomerNote = request.Note
+            CustomerNote = TextRules.CleanOptional(request.Note)
         };
 
-        foreach (var item in request.Dates)
+        foreach (var item in request.Dates.Distinct())
         {
             booking.Dates.Add(new BookingDate { Date = item });
         }
@@ -59,7 +65,7 @@ public sealed class BookingsController : ControllerBase
         _db.Bookings.Add(booking);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(booking.Id);
+        return Ok(ApiResponse<object>.Ok(new { booking.Id }));
     }
 
     [HttpPost("{id:long}/status")]
@@ -68,7 +74,7 @@ public sealed class BookingsController : ControllerBase
         var booking = await _db.Bookings.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (booking is null)
         {
-            return NotFound();
+            return NotFound(ApiResponse<object>.Fail("Booking not found."));
         }
 
         var oldStatusId = booking.StatusId;
@@ -80,10 +86,10 @@ public sealed class BookingsController : ControllerBase
             OldStatusId = oldStatusId,
             NewStatusId = request.NewStatusId,
             ChangedByUserId = request.ChangedByUserId,
-            Note = request.Note
+            Note = TextRules.CleanOptional(request.Note)
         });
 
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok();
+        return Ok(ApiResponse<object>.Ok(new { booking.Id, booking.StatusId }));
     }
 }
