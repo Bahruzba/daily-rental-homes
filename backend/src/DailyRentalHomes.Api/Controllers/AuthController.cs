@@ -66,7 +66,9 @@ public sealed class AuthController : ControllerBase
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(new { user.Id, user.FullName, user.PhoneNumber, user.Role });
+
+        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user.Id}:{user.PhoneNumber}:{user.Role}"));
+        return Ok(new { user.Id, user.FullName, user.PhoneNumber, user.Role, token });
     }
 
     private static string Hash(string value)
