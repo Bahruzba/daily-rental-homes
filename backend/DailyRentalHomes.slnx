@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj" />
+  <Project Path="src/DailyRentalHomes.Application/DailyRentalHomes.Application.csproj" />
+  <Project Path="src/DailyRentalHomes.Domain/DailyRentalHomes.Domain.csproj" />
+  <Project Path="src/DailyRentalHomes.Infrastructure/DailyRentalHomes.Infrastructure.csproj" />
+</Solution>
