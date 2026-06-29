@@ -24,6 +24,18 @@ public sealed class BookingsController : ControllerBase
         return Ok(items);
     }
 
+    [HttpGet("{id:long}")]
+    public async Task<IActionResult> GetById(long id, CancellationToken cancellationToken)
+    {
+        var item = await _db.Bookings
+            .AsNoTracking()
+            .Include(x => x.Dates)
+            .Include(x => x.Deposit)
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        return item is null ? NotFound() : Ok(item);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(NewBookingRequest request, CancellationToken cancellationToken)
     {
@@ -48,5 +60,30 @@ public sealed class BookingsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(booking.Id);
+    }
+
+    [HttpPost("{id:long}/status")]
+    public async Task<IActionResult> ChangeStatus(long id, ChangeBookingStatusRequest request, CancellationToken cancellationToken)
+    {
+        var booking = await _db.Bookings.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound();
+        }
+
+        var oldStatusId = booking.StatusId;
+        booking.StatusId = request.NewStatusId;
+
+        _db.BookingStatusHistory.Add(new BookingStatusHistory
+        {
+            BookingId = booking.Id,
+            OldStatusId = oldStatusId,
+            NewStatusId = request.NewStatusId,
+            ChangedByUserId = request.ChangedByUserId,
+            Note = request.Note
+        });
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok();
     }
 }
