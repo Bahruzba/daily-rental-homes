@@ -41,13 +41,22 @@ docs/
 
 ## Local Development
 
-Start the backend API:
+Start the backend API in Development mode. In Windows PowerShell:
+
+```powershell
+cd backend/src/DailyRentalHomes.Api
+$env:ASPNETCORE_ENVIRONMENT="Development"
+dotnet run --urls http://127.0.0.1:5099
+```
+
+In bash:
 
 ```bash
-cd backend
-dotnet restore DailyRentalHomes.slnx
-dotnet run --project src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj --urls http://127.0.0.1:5099
+cd backend/src/DailyRentalHomes.Api
+ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5099
 ```
+
+The local API is available at `http://127.0.0.1:5099`. The Development environment loads the local JWT key from `appsettings.Development.json`.
 
 Start the frontend in mock mode (the default):
 
