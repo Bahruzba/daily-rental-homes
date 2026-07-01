@@ -1,7 +1,9 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Amenities;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +27,7 @@ public sealed class AmenitiesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(items));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpPost]
     public async Task<IActionResult> Create(AmenityInput request, CancellationToken cancellationToken)
     {
@@ -45,6 +48,7 @@ public sealed class AmenitiesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { item.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, AmenityInput request, CancellationToken cancellationToken)
     {
@@ -67,6 +71,7 @@ public sealed class AmenitiesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { item.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

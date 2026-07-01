@@ -1,7 +1,9 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.RentalHomes;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -43,6 +45,7 @@ public sealed class RentalHomesController : ControllerBase
         return item is null ? NotFound(ApiResponse<object>.Fail("Rental home not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpPost]
     public async Task<IActionResult> Create(CreateRentalHomeRequest request, CancellationToken cancellationToken)
     {
@@ -51,9 +54,15 @@ public sealed class RentalHomesController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Title, city and positive daily price are required."));
         }
 
+        var brokerUserId = User.IsAdmin() ? request.BrokerUserId : User.GetUserId();
+        if (brokerUserId <= 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Broker is required."));
+        }
+
         var home = new RentalHome
         {
-            BrokerUserId = request.BrokerUserId,
+            BrokerUserId = brokerUserId,
             Title = TextRules.Clean(request.Title),
             Description = TextRules.Clean(request.Description),
             City = TextRules.Clean(request.City),
@@ -70,6 +79,7 @@ public sealed class RentalHomesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { home.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, UpdateRentalHomeRequest request, CancellationToken cancellationToken)
     {
@@ -82,6 +92,11 @@ public sealed class RentalHomesController : ControllerBase
         if (home is null)
         {
             return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+        }
+
+        if (!User.IsAdmin() && home.BrokerUserId != User.GetUserId())
+        {
+            return Forbid();
         }
 
         home.Title = TextRules.Clean(request.Title);
@@ -99,6 +114,7 @@ public sealed class RentalHomesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { home.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
@@ -106,6 +122,11 @@ public sealed class RentalHomesController : ControllerBase
         if (home is null)
         {
             return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+        }
+
+        if (!User.IsAdmin() && home.BrokerUserId != User.GetUserId())
+        {
+            return Forbid();
         }
 
         home.IsDeleted = true;

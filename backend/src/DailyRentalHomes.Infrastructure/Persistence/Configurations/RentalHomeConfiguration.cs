@@ -18,5 +18,10 @@ public sealed class RentalHomeConfiguration : IEntityTypeConfiguration<RentalHom
         builder.Property(x => x.DailyPrice).HasPrecision(18, 2);
         builder.HasIndex(x => x.City);
         builder.HasIndex(x => x.BrokerUserId);
+
+        builder.HasOne(x => x.BrokerUser)
+            .WithMany()
+            .HasForeignKey(x => x.BrokerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -13,5 +13,25 @@ public sealed class BookingStatusHistoryConfiguration : IEntityTypeConfiguration
         builder.Property(x => x.Note).HasMaxLength(1000);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.NewStatusId);
+
+        builder.HasOne(x => x.Booking)
+            .WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.BookingId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.OldStatus)
+            .WithMany()
+            .HasForeignKey(x => x.OldStatusId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(x => x.NewStatus)
+            .WithMany()
+            .HasForeignKey(x => x.NewStatusId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(x => x.ChangedByUser)
+            .WithMany()
+            .HasForeignKey(x => x.ChangedByUserId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

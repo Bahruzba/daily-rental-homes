@@ -3,4 +3,5 @@
   <Project Path="src/DailyRentalHomes.Application/DailyRentalHomes.Application.csproj" />
   <Project Path="src/DailyRentalHomes.Domain/DailyRentalHomes.Domain.csproj" />
   <Project Path="src/DailyRentalHomes.Infrastructure/DailyRentalHomes.Infrastructure.csproj" />
+  <Project Path="tests/DailyRentalHomes.Tests/DailyRentalHomes.Tests.csproj" />
 </Solution>

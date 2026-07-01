@@ -14,5 +14,15 @@ public sealed class BookingDepositConfiguration : IEntityTypeConfiguration<Booki
         builder.Property(x => x.Note).HasMaxLength(1000);
         builder.HasIndex(x => x.BookingId).IsUnique();
         builder.HasIndex(x => x.Status);
+
+        builder.HasOne(x => x.Booking)
+            .WithOne(x => x.Deposit)
+            .HasForeignKey<BookingDeposit>(x => x.BookingId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(x => x.PaymentCard)
+            .WithMany()
+            .HasForeignKey(x => x.PaymentCardId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

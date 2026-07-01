@@ -1,12 +1,16 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Auth;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -19,14 +23,22 @@ public sealed class AuthController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IMessageSender _messageSender;
     private readonly AccessTokenBuilder _accessTokenBuilder;
+    private readonly IHostEnvironment _environment;
 
-    public AuthController(AppDbContext db, IMessageSender messageSender, AccessTokenBuilder accessTokenBuilder)
+    public AuthController(
+        AppDbContext db,
+        IMessageSender messageSender,
+        AccessTokenBuilder accessTokenBuilder,
+        IHostEnvironment environment)
     {
         _db = db;
         _messageSender = messageSender;
         _accessTokenBuilder = accessTokenBuilder;
+        _environment = environment;
     }
 
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [HttpPost("send")]
     public async Task<IActionResult> Send(PhoneInput input, CancellationToken cancellationToken)
     {
@@ -61,9 +73,15 @@ public sealed class AuthController : ControllerBase
         _db.OutboundMessages.Add(message);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return Ok(ApiResponse<object>.Ok(new { devPin = pin }));
+        object response = _environment.IsDevelopment()
+            ? new { devPin = pin }
+            : new { message = "Code sent." };
+
+        return Ok(ApiResponse<object>.Ok(response));
     }
 
+    [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Authentication)]
     [HttpPost("confirm")]
     public async Task<IActionResult> Confirm(ConfirmInput input, CancellationToken cancellationToken)
     {
@@ -73,14 +91,20 @@ public sealed class AuthController : ControllerBase
         }
 
         var phone = TextRules.Clean(input.Phone);
-        var pinHash = Hash(input.Pin);
         var otp = await _db.OtpCodes
-            .Where(x => x.PhoneNumber == phone && x.CodeHash == pinHash && x.UsedAt == null && x.ExpiresAt > DateTime.UtcNow)
+            .Where(x => x.PhoneNumber == phone && x.UsedAt == null && x.ExpiresAt > DateTime.UtcNow)
             .OrderByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (otp is null)
+        if (otp is null || otp.TryCount >= 5)
         {
+            return BadRequest(ApiResponse<object>.Fail("Invalid code."));
+        }
+
+        if (!MatchesHash(input.Pin, otp.CodeHash))
+        {
+            otp.TryCount++;
+            await _db.SaveChangesAsync(cancellationToken);
             return BadRequest(ApiResponse<object>.Fail("Invalid code."));
         }
 
@@ -93,9 +117,14 @@ public sealed class AuthController : ControllerBase
             {
                 FullName = TextRules.Empty(input.FullName) ? phone : TextRules.Clean(input.FullName),
                 PhoneNumber = phone,
-                Role = (UserRole)input.Role
+                Role = UserRole.Customer
             };
             _db.Users.Add(user);
+        }
+
+        if (!user.IsActive)
+        {
+            return Unauthorized(ApiResponse<object>.Fail("User is inactive."));
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -104,9 +133,36 @@ public sealed class AuthController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { user.Id, user.FullName, user.PhoneNumber, user.Role, token }));
     }
 
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me()
+    {
+        return Ok(ApiResponse<object>.Ok(new
+        {
+            id = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value,
+            name = User.FindFirst("name")?.Value,
+            phoneNumber = User.FindFirst("phone_number")?.Value,
+            role = User.FindFirst("role")?.Value
+        }));
+    }
+
     private static string Hash(string value)
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
         return Convert.ToHexString(bytes);
+    }
+
+    private static bool MatchesHash(string value, string expectedHash)
+    {
+        try
+        {
+            var actualBytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+            var expectedBytes = Convert.FromHexString(expectedHash);
+            return CryptographicOperations.FixedTimeEquals(actualBytes, expectedBytes);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }
