@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="az">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wireframe — Broker paneli</title>
+  <link rel="stylesheet" href="wireframe.css">
+</head>
+<body>
+  <div class="dashboard">
+    <aside class="sidebar">
+      <div class="brand">Daily<span>Homes</span></div>
+      <nav class="side-nav"><a class="side-link active" href="#">İcmal</a><a class="side-link" href="#">Evlərim</a><a class="side-link" href="#">Rezervasiyalar</a><a class="side-link" href="#">Beh ödənişləri</a><a class="side-link" href="#">Mesajlar</a></nav>
+    </aside>
+    <main class="dashboard-main">
+      <header class="dash-top"><div><div class="eyebrow">Broker paneli</div><h1 style="font-size:34px;margin-bottom:4px">Sabahınız xeyir, Əli</h1><p class="muted">Bu gün diqqət tələb edən işlər.</p></div><button class="button primary">+ Yeni ev əlavə et</button></header>
+
+      <section class="kpis">
+        <article class="card kpi"><span class="muted">Aktiv evlər</span><div class="kpi-value">8</div><small class="muted">2 qaralama</small></article>
+        <article class="card kpi"><span class="muted">Gözləyən sorğular</span><div class="kpi-value">5</div><small class="muted">3 yeni</small></article>
+        <article class="card kpi"><span class="muted">Beh gözlənilir</span><div class="kpi-value">3</div><small class="muted">1-i bu gün</small></article>
+        <article class="card kpi"><span class="muted">Bu ay rezervasiya</span><div class="kpi-value">14</div><small class="muted">+4 keçən aydan</small></article>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="panel">
+          <div class="section-head"><div><h2>Son rezervasiya sorğuları</h2><p class="muted">Ən yeni sorğular əvvəl göstərilir</p></div><button class="button">Hamısına bax</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Müştəri</th><th>Ev</th><th>Tarixlər</th><th>Status</th><th></th></tr></thead><tbody><tr><td>Aysel M.</td><td>Qəbələ bağ evi</td><td>12–14 iyul</td><td><span class="status">Gözləyir</span></td><td>→</td></tr><tr><td>Murad R.</td><td>Nabran villa</td><td>18–20 iyul</td><td><span class="status">Beh gözlənilir</span></td><td>→</td></tr><tr><td>Leyla H.</td><td>İsmayıllı kottec</td><td>22 iyul</td><td><span class="status">Yeni</span></td><td>→</td></tr></tbody></table></div>
+        </div>
+
+        <aside class="panel"><div class="section-head"><div><h2>Yaxın müddətlər</h2><p class="muted">Növbəti 24 saat</p></div></div><div class="alert-item"><strong>Beh üçün 2 saat qalıb</strong><p class="muted">#BK-104 · 120 ₼</p><button class="button soft">Xatırlatma göndər</button></div><div class="alert-item"><strong>Beh üçün 7 saat qalıb</strong><p class="muted">#BK-108 · 80 ₼</p><button class="button">Müddəti uzat</button></div><div class="wire-note" style="margin-top:16px">Admin görünüşündə əlavə olaraq brokerlər, rahatlıqlar və status lüğətləri olacaq.</div></aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
