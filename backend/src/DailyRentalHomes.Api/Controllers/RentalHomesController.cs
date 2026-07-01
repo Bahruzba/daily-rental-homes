@@ -38,9 +38,26 @@ public sealed class RentalHomesController : ControllerBase
     {
         var item = await _db.RentalHomes
             .AsNoTracking()
-            .Include(x => x.MediaFiles)
-            .Include(x => x.Contacts)
-            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+            .Where(x => x.Id == id && !x.IsDeleted)
+            .Select(x => new RentalHomeDetailResponse(
+                x.Id,
+                x.Title,
+                x.Description,
+                x.City,
+                x.District,
+                x.Address,
+                x.DailyPrice,
+                x.RoomCount,
+                x.GuestCount,
+                x.IsPublished,
+                x.MediaFiles
+                    .OrderBy(media => media.SortOrder)
+                    .Select(media => new RentalHomeMediaResponse(media.FileUrl, media.SortOrder))
+                    .ToList(),
+                x.Contacts
+                    .Select(contact => new RentalHomeContactResponse(contact.FullName, contact.Value, (int)contact.ContactType))
+                    .ToList()))
+            .FirstOrDefaultAsync(cancellationToken);
 
         return item is null ? NotFound(ApiResponse<object>.Fail("Rental home not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
