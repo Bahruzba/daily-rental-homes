@@ -1,15 +1,18 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Messages;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace DailyRentalHomes.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
 [Route("api/messages")]
 public sealed class MessagesController : ControllerBase
 {

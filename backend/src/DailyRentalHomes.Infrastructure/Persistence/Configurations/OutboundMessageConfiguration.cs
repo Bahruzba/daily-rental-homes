@@ -18,5 +18,15 @@ public sealed class OutboundMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.HasIndex(x => x.Status);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.BookingDepositId);
+
+        builder.HasOne(x => x.Booking)
+            .WithMany()
+            .HasForeignKey(x => x.BookingId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(x => x.BookingDeposit)
+            .WithMany()
+            .HasForeignKey(x => x.BookingDepositId)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

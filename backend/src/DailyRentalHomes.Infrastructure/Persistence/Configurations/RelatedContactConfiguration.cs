@@ -14,5 +14,10 @@ public sealed class RelatedContactConfiguration : IEntityTypeConfiguration<Relat
         builder.Property(x => x.Value).HasMaxLength(100).IsRequired();
         builder.HasIndex(x => x.RentalHomeId);
         builder.HasIndex(x => x.ContactType);
+
+        builder.HasOne(x => x.RentalHome)
+            .WithMany(x => x.Contacts)
+            .HasForeignKey(x => x.RentalHomeId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

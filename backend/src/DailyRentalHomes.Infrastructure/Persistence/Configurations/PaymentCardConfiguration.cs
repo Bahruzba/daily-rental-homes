@@ -13,5 +13,10 @@ public sealed class PaymentCardConfiguration : IEntityTypeConfiguration<PaymentC
         builder.Property(x => x.CardHolderName).HasMaxLength(150).IsRequired();
         builder.Property(x => x.PanMasked).HasMaxLength(30).IsRequired();
         builder.HasIndex(x => x.BrokerUserId);
+
+        builder.HasOne(x => x.BrokerUser)
+            .WithMany()
+            .HasForeignKey(x => x.BrokerUserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

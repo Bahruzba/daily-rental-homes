@@ -1,7 +1,9 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.MediaFiles;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +20,7 @@ public sealed class MediaFilesController : ControllerBase
         _db = db;
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
@@ -25,6 +28,7 @@ public sealed class MediaFilesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(items));
     }
 
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> Create(NewMediaFileRequest request, CancellationToken cancellationToken)
     {
@@ -51,6 +55,7 @@ public sealed class MediaFilesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { file.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

@@ -1,7 +1,9 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Contacts;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,12 +27,25 @@ public sealed class ContactsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(items));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpPost]
     public async Task<IActionResult> Create(NewContactRequest request, CancellationToken cancellationToken)
     {
         if (request.RentalHomeId <= 0 || TextRules.Empty(request.Value))
         {
             return BadRequest(ApiResponse<object>.Fail("Rental home and contact value are required."));
+        }
+
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            var ownsHome = await _db.RentalHomes.AnyAsync(
+                x => x.Id == request.RentalHomeId && x.BrokerUserId == userId,
+                cancellationToken);
+            if (!ownsHome)
+            {
+                return Forbid();
+            }
         }
 
         var contact = new RelatedContact
@@ -48,6 +63,7 @@ public sealed class ContactsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { contact.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {
@@ -55,6 +71,18 @@ public sealed class ContactsController : ControllerBase
         if (contact is null)
         {
             return NotFound(ApiResponse<object>.Fail("Contact not found."));
+        }
+
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            var ownsHome = await _db.RentalHomes.AnyAsync(
+                x => x.Id == contact.RentalHomeId && x.BrokerUserId == userId,
+                cancellationToken);
+            if (!ownsHome)
+            {
+                return Forbid();
+            }
         }
 
         contact.IsDeleted = true;

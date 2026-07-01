@@ -1,7 +1,9 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Bookings;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,21 +20,38 @@ public sealed class BookingsController : ControllerBase
         _db = db;
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.Bookings.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync(cancellationToken);
+        var query = _db.Bookings.AsNoTracking();
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            query = query.Where(x => x.RentalHome!.BrokerUserId == userId);
+        }
+
+        var items = await query.OrderByDescending(x => x.Id).ToListAsync(cancellationToken);
         return Ok(ApiResponse<object>.Ok(items));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetById(long id, CancellationToken cancellationToken)
     {
-        var item = await _db.Bookings
+        var query = _db.Bookings
             .AsNoTracking()
             .Include(x => x.Dates)
             .Include(x => x.Deposit)
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            .AsQueryable();
+
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            query = query.Where(x => x.RentalHome!.BrokerUserId == userId);
+        }
+
+        var item = await query.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
         return item is null ? NotFound(ApiResponse<object>.Fail("Booking not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
@@ -68,10 +87,18 @@ public sealed class BookingsController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { booking.Id }));
     }
 
+    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
     [HttpPost("{id:long}/status")]
     public async Task<IActionResult> ChangeStatus(long id, ChangeBookingStatusRequest request, CancellationToken cancellationToken)
     {
-        var booking = await _db.Bookings.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var query = _db.Bookings.AsQueryable();
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            query = query.Where(x => x.RentalHome!.BrokerUserId == userId);
+        }
+
+        var booking = await query.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (booking is null)
         {
             return NotFound(ApiResponse<object>.Fail("Booking not found."));
@@ -85,7 +112,7 @@ public sealed class BookingsController : ControllerBase
             BookingId = booking.Id,
             OldStatusId = oldStatusId,
             NewStatusId = request.NewStatusId,
-            ChangedByUserId = request.ChangedByUserId,
+            ChangedByUserId = User.GetUserId(),
             Note = TextRules.CleanOptional(request.Note)
         });
 

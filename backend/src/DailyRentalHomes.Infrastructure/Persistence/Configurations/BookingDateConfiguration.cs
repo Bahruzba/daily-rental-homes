@@ -12,5 +12,10 @@ public sealed class BookingDateConfiguration : IEntityTypeConfiguration<BookingD
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Date).IsRequired();
         builder.HasIndex(x => new { x.BookingId, x.Date }).IsUnique();
+
+        builder.HasOne(x => x.Booking)
+            .WithMany(x => x.Dates)
+            .HasForeignKey(x => x.BookingId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

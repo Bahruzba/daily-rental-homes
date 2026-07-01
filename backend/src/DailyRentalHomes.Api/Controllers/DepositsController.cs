@@ -1,15 +1,18 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Deposits;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace DailyRentalHomes.Api.Controllers;
 
 [ApiController]
+[Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
 [Route("api/deposits")]
 public sealed class DepositsController : ControllerBase
 {
@@ -25,14 +28,19 @@ public sealed class DepositsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
-        var items = await _db.BookingDeposits.AsNoTracking().OrderByDescending(x => x.Id).ToListAsync(cancellationToken);
+        var items = await AccessibleDeposits()
+            .AsNoTracking()
+            .OrderByDescending(x => x.Id)
+            .ToListAsync(cancellationToken);
         return Ok(ApiResponse<object>.Ok(items));
     }
 
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetById(long id, CancellationToken cancellationToken)
     {
-        var item = await _db.BookingDeposits.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var item = await AccessibleDeposits()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         return item is null ? NotFound(ApiResponse<object>.Fail("Deposit not found.")) : Ok(ApiResponse<object>.Ok(item));
     }
 
@@ -42,6 +50,20 @@ public sealed class DepositsController : ControllerBase
         if (request.BookingId <= 0 || request.Amount <= 0)
         {
             return BadRequest(ApiResponse<object>.Fail("Booking and amount are required."));
+        }
+
+        var booking = await _db.Bookings
+            .AsNoTracking()
+            .Include(x => x.RentalHome)
+            .FirstOrDefaultAsync(x => x.Id == request.BookingId, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Booking not found."));
+        }
+
+        if (!User.IsAdmin() && booking.RentalHome?.BrokerUserId != User.GetUserId())
+        {
+            return Forbid();
         }
 
         var deposit = new BookingDeposit
@@ -63,7 +85,7 @@ public sealed class DepositsController : ControllerBase
     [HttpPost("{id:long}/status")]
     public async Task<IActionResult> UpdateStatus(long id, UpdateDepositStatusInput input, CancellationToken cancellationToken)
     {
-        var deposit = await _db.BookingDeposits.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var deposit = await AccessibleDeposits().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (deposit is null)
         {
             return NotFound(ApiResponse<object>.Fail("Deposit not found."));
@@ -89,7 +111,9 @@ public sealed class DepositsController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Receiver is required."));
         }
 
-        var deposit = await _db.BookingDeposits.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var deposit = await AccessibleDeposits()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (deposit is null)
         {
             return NotFound(ApiResponse<object>.Fail("Deposit not found."));
@@ -114,5 +138,17 @@ public sealed class DepositsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         return Ok(ApiResponse<object>.Ok(new { message.Id }));
+    }
+
+    private IQueryable<BookingDeposit> AccessibleDeposits()
+    {
+        var query = _db.BookingDeposits.AsQueryable();
+        if (!User.IsAdmin())
+        {
+            var userId = User.GetUserId();
+            query = query.Where(x => x.Booking!.RentalHome!.BrokerUserId == userId);
+        }
+
+        return query;
     }
 }
