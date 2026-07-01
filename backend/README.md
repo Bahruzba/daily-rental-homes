@@ -12,13 +12,33 @@
 - DailyRentalHomes.Domain
 - DailyRentalHomes.Infrastructure
 
-## Run
+## Build
 
 ```bash
 dotnet restore DailyRentalHomes.slnx
 dotnet build DailyRentalHomes.slnx
-dotnet run --project src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj --urls http://127.0.0.1:5099
 ```
+
+## Run locally
+
+The API must use the Development environment so that the local JWT key is loaded from `appsettings.Development.json`.
+
+Windows PowerShell:
+
+```powershell
+cd src/DailyRentalHomes.Api
+$env:ASPNETCORE_ENVIRONMENT="Development"
+dotnet run --urls http://127.0.0.1:5099
+```
+
+Bash:
+
+```bash
+cd src/DailyRentalHomes.Api
+ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5099
+```
+
+The local API is available at `http://127.0.0.1:5099`. The included launch profile also selects Development and port `5099` for a plain `dotnet run` from the API project directory.
 
 ## Database
 
