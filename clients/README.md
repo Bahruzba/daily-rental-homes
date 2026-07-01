@@ -1,15 +1,18 @@
 # Clients
 
-This folder is reserved for applications that consume the backend API.
+This folder contains applications that consume the backend API.
 
-## Planned clients
+## Clients
 
 ```text
 clients/
-  web-app/
-  mobile-app/
+  web-app/     # React + TypeScript + Vite MVP
 ```
 
-## Current status
+## Web app
 
-The MVP starts with the backend API. The website and mobile app will be added later as separate projects.
+```bash
+cd web-app
+npm install
+npm run dev
+```

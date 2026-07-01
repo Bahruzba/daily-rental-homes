@@ -9,3 +9,21 @@ public sealed record RentalHomeResponse(
     int RoomCount,
     int GuestCount,
     bool IsPublished);
+
+public sealed record RentalHomeDetailResponse(
+    long Id,
+    string Title,
+    string Description,
+    string City,
+    string? District,
+    string? Address,
+    decimal DailyPrice,
+    int RoomCount,
+    int GuestCount,
+    bool IsPublished,
+    List<RentalHomeMediaResponse> MediaFiles,
+    List<RentalHomeContactResponse> Contacts);
+
+public sealed record RentalHomeMediaResponse(string FileUrl, int SortOrder);
+
+public sealed record RentalHomeContactResponse(string FullName, string Value, int ContactType);

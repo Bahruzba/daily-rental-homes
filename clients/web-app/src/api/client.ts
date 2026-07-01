@@ -4,13 +4,40 @@ import type { ApiResponse, BookingPayload, BookingResult, RentalHome } from '../
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const useLiveApi = import.meta.env.VITE_USE_LIVE_API === 'true'
 
-function withMockPresentation(home: RentalHome): RentalHome {
+type RentalHomeApiModel = Pick<RentalHome, 'id' | 'title' | 'city' | 'dailyPrice' | 'roomCount' | 'guestCount' | 'isPublished'> & {
+  description?: string
+  district?: string | null
+  address?: string | null
+  mediaFiles?: Array<{ fileUrl: string; sortOrder: number }>
+  contacts?: Array<{ fullName: string; value: string; contactType: number }>
+}
+
+function getWhatsAppUrl(value: string | undefined, fallback: string) {
+  if (!value) return fallback
+  if (/^https?:\/\//i.test(value)) return value
+  const digits = value.replace(/\D/g, '')
+  return digits ? `https://wa.me/${digits}` : fallback
+}
+
+function withMockPresentation(home: RentalHomeApiModel): RentalHome {
   const fallback = demoHomes[(Math.abs(home.id) - 1) % demoHomes.length]
+  const phone = home.contacts?.find((contact) => contact.contactType === 1)
+  const whatsapp = home.contacts?.find((contact) => contact.contactType === 2)
+  const apiImages = home.mediaFiles
+    ?.filter((media) => media.fileUrl)
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((media) => media.fileUrl)
+
   return {
     ...fallback,
     ...home,
-    images: home.images?.length ? home.images : fallback.images,
-    contact: home.contact ?? fallback.contact,
+    description: home.description || fallback.description,
+    images: apiImages?.length ? apiImages : fallback.images,
+    contact: {
+      name: phone?.fullName || whatsapp?.fullName || fallback.contact.name,
+      phone: phone?.value || fallback.contact.phone,
+      whatsapp: getWhatsAppUrl(whatsapp?.value, fallback.contact.whatsapp),
+    },
   }
 }
 
@@ -20,7 +47,7 @@ export async function getRentalHomes(): Promise<RentalHome[]> {
   try {
     const response = await fetch(`${baseUrl}/api/rental-homes`)
     if (!response.ok) throw new Error('Rental homes request failed')
-    const payload = (await response.json()) as ApiResponse<RentalHome[]>
+    const payload = (await response.json()) as ApiResponse<RentalHomeApiModel[]>
     return payload.success && payload.data?.length
       ? payload.data.map(withMockPresentation)
       : demoHomes
@@ -30,8 +57,17 @@ export async function getRentalHomes(): Promise<RentalHome[]> {
 }
 
 export async function getRentalHomeById(id: number): Promise<RentalHome | undefined> {
-  const homes = await getRentalHomes()
-  return homes.find((home) => home.id === id)
+  const fallback = demoHomes.find((home) => home.id === id)
+  if (!useLiveApi) return fallback
+
+  try {
+    const response = await fetch(`${baseUrl}/api/rental-homes/${id}`)
+    if (!response.ok) return fallback
+    const payload = (await response.json()) as ApiResponse<RentalHomeApiModel>
+    return payload.success && payload.data ? withMockPresentation(payload.data) : fallback
+  } catch {
+    return fallback
+  }
 }
 
 export async function createBooking(payload: BookingPayload): Promise<BookingResult> {

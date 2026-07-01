@@ -17,7 +17,7 @@
 ```bash
 dotnet restore DailyRentalHomes.slnx
 dotnet build DailyRentalHomes.slnx
-dotnet run --project src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj
+dotnet run --project src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj --urls http://127.0.0.1:5099
 ```
 
 ## Database
