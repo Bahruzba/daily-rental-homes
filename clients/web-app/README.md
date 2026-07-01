@@ -2,6 +2,8 @@
 
 React, TypeScript və Vite ilə hazırlanmış frontend MVP. Tətbiq hazırda mock ev məlumatlarından istifadə edir; API qatı backend-ə keçid üçün ayrıca saxlanılıb.
 
+Tələb olunan mühit: Node.js `20.19+` və ya `22.12+`.
+
 ## Lokal işə salma
 
 ```bash
