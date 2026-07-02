@@ -81,7 +81,12 @@ export async function createBooking(payload: BookingPayload): Promise<BookingRes
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  const result = (await response.json()) as ApiResponse<{ id: number }>
+  let result: ApiResponse<{ id: number }>
+  try {
+    result = (await response.json()) as ApiResponse<{ id: number }>
+  } catch {
+    throw new Error(`Booking API returned an invalid response (${response.status})`)
+  }
   if (!response.ok || !result.success || !result.data) {
     throw new Error(result.error || 'Rezervasiya sorğusu göndərilmədi')
   }

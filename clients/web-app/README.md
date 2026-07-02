@@ -24,6 +24,16 @@ VITE_API_BASE_URL=
 
 Boş `VITE_API_BASE_URL` lokal Vite `/api` proxy-sindən istifadə edir. Ayrı hostda yerləşən API üçün tam base URL yazıla bilər.
 
+Real booking axınını yoxlamaq üçün PowerShell-də:
+
+```powershell
+$env:VITE_USE_LIVE_API="true"
+$env:VITE_API_BASE_URL="http://127.0.0.1:5099"
+npm run dev
+```
+
+Sonra backend-də mövcud ev ID-si ilə, məsələn `http://127.0.0.1:5173/booking/1`, booking formasını göndərin. Uğurlu live cavab backend-in yaratdığı booking ID-ni göstərir; mock rejimində demo bildirişi saxlanılır.
+
 Production build:
 
 ```bash

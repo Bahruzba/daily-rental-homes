@@ -26,7 +26,8 @@ export function BookingForm({ home }: { home: RentalHome }) {
       const result = await createBooking({ rentalHomeId: home.id, name: String(form.get('name')), phone: String(form.get('phone')), guests, price: home.dailyPrice, dates, note: String(form.get('note') || '') })
       setConfirmation(result)
       window.scrollTo({ top: 0, behavior: 'smooth' })
-    } catch {
+    } catch (technicalError) {
+      console.error('Booking submit failed', technicalError)
       setError('Sorğunu göndərmək mümkün olmadı. Bir qədər sonra yenidən yoxlayın.')
     } finally {
       setSubmitting(false)
