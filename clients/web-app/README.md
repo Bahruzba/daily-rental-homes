@@ -34,6 +34,8 @@ npm run dev
 
 Sonra backend-də mövcud ev ID-si ilə, məsələn `http://127.0.0.1:5173/booking/1`, booking formasını göndərin. Uğurlu live cavab backend-in yaratdığı booking ID-ni göstərir; mock rejimində demo bildirişi saxlanılır.
 
+Live booking sorğusu yalnız `rentalHomeId`, ad, telefon, qonaq sayı, seçilmiş tarixlər və qeydi göndərir. Etibarlı gecəlik qiymət və ümumi məbləğ backend tərəfindən hesablanır. Uğurlu cavab booking ID, Pending statusu, backend məbləği və tarixləri qaytarır. Eyni ev üçün aktiv booking-lə üst-üstə düşən tarix seçilərsə forma tarix konfliktini göstərir.
+
 Production build:
 
 ```bash

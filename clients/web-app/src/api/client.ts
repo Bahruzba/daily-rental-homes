@@ -12,6 +12,26 @@ type RentalHomeApiModel = Pick<RentalHome, 'id' | 'title' | 'city' | 'dailyPrice
   contacts?: Array<{ fullName: string; value: string; contactType: number }>
 }
 
+type BookingCreatedApiModel = {
+  bookingId: number
+  rentalHomeId: number
+  statusCode: string
+  statusName: string
+  dailyPrice: number
+  totalAmount: number
+  dates: string[]
+  customerName: string
+  phone: string
+  createdAt: string
+}
+
+export class BookingRequestError extends Error {
+  constructor(message: string, readonly technicalCause?: unknown) {
+    super(message)
+    this.name = 'BookingRequestError'
+  }
+}
+
 function getWhatsAppUrl(value: string | undefined, fallback: string) {
   if (!value) return fallback
   if (/^https?:\/\//i.test(value)) return value
@@ -76,19 +96,42 @@ export async function createBooking(payload: BookingPayload): Promise<BookingRes
     return { id: Math.floor(1000 + Math.random() * 9000), demo: true }
   }
 
-  const response = await fetch(`${baseUrl}/api/bookings`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  let result: ApiResponse<{ id: number }>
+  let response: Response
   try {
-    result = (await response.json()) as ApiResponse<{ id: number }>
-  } catch {
-    throw new Error(`Booking API returned an invalid response (${response.status})`)
+    response = await fetch(`${baseUrl}/api/bookings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (technicalCause) {
+    throw new BookingRequestError('Serverlə əlaqə qurmaq mümkün olmadı. Bir qədər sonra yenidən yoxlayın.', technicalCause)
+  }
+
+  let result: ApiResponse<BookingCreatedApiModel>
+  try {
+    result = (await response.json()) as ApiResponse<BookingCreatedApiModel>
+  } catch (technicalCause) {
+    throw new BookingRequestError('Serverdən düzgün cavab alınmadı.', technicalCause)
   }
   if (!response.ok || !result.success || !result.data) {
-    throw new Error(result.error || 'Rezervasiya sorğusu göndərilmədi')
+    const apiError = result.error || 'Rezervasiya sorğusu göndərilmədi.'
+    const message = apiError.toLowerCase().includes('date conflict')
+      ? 'Seçilmiş tarixlərdən biri artıq rezervasiya olunub. Başqa tarix seçin.'
+      : apiError
+    throw new BookingRequestError(message, new Error(apiError))
   }
-  return { id: result.data.id, demo: false }
+
+  return {
+    id: result.data.bookingId,
+    demo: false,
+    rentalHomeId: result.data.rentalHomeId,
+    statusCode: result.data.statusCode,
+    statusName: result.data.statusName,
+    dailyPrice: result.data.dailyPrice,
+    totalAmount: result.data.totalAmount,
+    dates: result.data.dates,
+    customerName: result.data.customerName,
+    phone: result.data.phone,
+    createdAt: result.data.createdAt,
+  }
 }

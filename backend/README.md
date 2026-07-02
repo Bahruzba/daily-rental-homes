@@ -108,6 +108,8 @@ build.sh
 - POST /api/bookings
 - POST /api/bookings/{id}/status
 
+`POST /api/bookings` accepts `rentalHomeId`, `name`, `phone`, `guests`, `dates[]`, and optional `note`. The backend loads the rental home's daily price, resolves the Pending status by its stable code, sorts the dates, and calculates the total amount. Duplicate dates in one request and dates blocked by non-cancelled bookings for the same home return a validation error.
+
 ### Deposits
 
 - GET /api/deposits

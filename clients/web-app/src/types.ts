@@ -33,7 +33,6 @@ export type BookingPayload = {
   name: string
   phone: string
   guests: number
-  price: number
   dates: string[]
   note?: string
 }
@@ -41,4 +40,13 @@ export type BookingPayload = {
 export type BookingResult = {
   id: number
   demo: boolean
+  rentalHomeId?: number
+  statusCode?: string
+  statusName?: string
+  dailyPrice?: number
+  totalAmount?: number
+  dates?: string[]
+  customerName?: string
+  phone?: string
+  createdAt?: string
 }
