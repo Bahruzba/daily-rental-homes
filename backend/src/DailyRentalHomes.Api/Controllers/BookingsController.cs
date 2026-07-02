@@ -178,7 +178,7 @@ public sealed class BookingsController : ControllerBase
         return Ok(ApiResponse<BookingCreatedResponse>.Ok(response));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpPost("{id:long}/status")]
     public async Task<IActionResult> ChangeStatus(long id, ChangeBookingStatusRequest request, CancellationToken cancellationToken)
     {

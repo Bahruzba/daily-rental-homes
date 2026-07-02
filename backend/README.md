@@ -112,6 +112,16 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 
 `POST /api/bookings` accepts `rentalHomeId`, `name`, `phone`, `guests`, `dates[]`, and optional `note`. The backend loads the rental home's daily price, resolves the Pending status by its stable code, sorts the dates, and calculates the total amount. Duplicate dates in one request and dates blocked by non-cancelled bookings for the same home return a validation error.
 
+### Broker dashboard
+
+- GET /api/broker/summary
+- GET /api/broker/rental-homes
+- GET /api/broker/bookings
+- GET /api/broker/bookings/{id}
+- PATCH /api/broker/bookings/{id}/status
+
+Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. The broker status endpoint accepts a stable `statusCode`, records status history, and currently allows only `pending -> waiting_deposit/cancelled` and `waiting_deposit -> confirmed/cancelled`. Cancellation keeps the existing rule that cancelled bookings do not block dates. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
+
 ### Deposits
 
 - GET /api/deposits
