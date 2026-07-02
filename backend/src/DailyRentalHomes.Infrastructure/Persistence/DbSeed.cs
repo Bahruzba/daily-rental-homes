@@ -1,4 +1,5 @@
 using DailyRentalHomes.Domain.Entities;
+using DailyRentalHomes.Domain.Constants;
 using Microsoft.EntityFrameworkCore;
 
 namespace DailyRentalHomes.Infrastructure.Persistence;
@@ -9,12 +10,12 @@ public static class DbSeed
     {
         if (!await db.BookingStatuses.AnyAsync(cancellationToken))
         {
-            db.BookingStatuses.Add(new BookingStatus { Name = "Pending", Code = "pending", SortOrder = 1 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "WaitingDeposit", Code = "waiting_deposit", SortOrder = 2 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Paid", Code = "paid", SortOrder = 3 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Confirmed", Code = "confirmed", SortOrder = 4 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Cancelled", Code = "cancelled", SortOrder = 5 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Completed", Code = "completed", SortOrder = 6 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "Pending", Code = BookingStatusCodes.Pending, SortOrder = 1 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "WaitingDeposit", Code = BookingStatusCodes.WaitingDeposit, SortOrder = 2 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "Paid", Code = BookingStatusCodes.Paid, SortOrder = 3 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 4 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "Cancelled", Code = BookingStatusCodes.Cancelled, SortOrder = 5 });
+            db.BookingStatuses.Add(new BookingStatus { Name = "Completed", Code = BookingStatusCodes.Completed, SortOrder = 6 });
         }
 
         if (!await db.Amenities.AnyAsync(cancellationToken))

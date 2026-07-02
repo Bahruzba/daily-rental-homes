@@ -1,7 +1,7 @@
 import { CalendarDays, CheckCircle2, Minus, Plus, ShieldCheck } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createBooking } from '../api/client'
+import { BookingRequestError, createBooking } from '../api/client'
 import type { BookingResult, RentalHome } from '../types'
 
 const availableDates = Array.from({ length: 14 }, (_, index) => ({ value: `2026-07-${String(index + 8).padStart(2, '0')}`, label: index + 8 }))
@@ -23,18 +23,24 @@ export function BookingForm({ home }: { home: RentalHome }) {
     setSubmitting(true)
     setError('')
     try {
-      const result = await createBooking({ rentalHomeId: home.id, name: String(form.get('name')), phone: String(form.get('phone')), guests, price: home.dailyPrice, dates, note: String(form.get('note') || '') })
+      const result = await createBooking({ rentalHomeId: home.id, name: String(form.get('name')), phone: String(form.get('phone')), guests, dates, note: String(form.get('note') || '') })
       setConfirmation(result)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (technicalError) {
-      console.error('Booking submit failed', technicalError)
-      setError('Sorğunu göndərmək mümkün olmadı. Bir qədər sonra yenidən yoxlayın.')
+      const errorMessage = technicalError instanceof BookingRequestError
+        ? technicalError.message
+        : 'Sorğunu göndərmək mümkün olmadı. Bir qədər sonra yenidən yoxlayın.'
+      const consoleError = technicalError instanceof BookingRequestError
+        ? technicalError.technicalCause ?? technicalError
+        : technicalError
+      console.error('Booking submit failed', consoleError)
+      setError(errorMessage)
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (confirmation) return <section className="confirmation-page"><div className="confirmation-icon"><CheckCircle2 /></div><span className="eyebrow">SORĞU GÖNDƏRİLDİ</span><h1>İndi növbə brokerdədir.</h1><p>Sorğunuz <strong>#{confirmation.id}</strong> nömrəsi ilə qeydə alındı. Broker tarixləri yoxladıqdan sonra sizinlə əlaqə saxlayacaq.</p>{confirmation.demo && <div className="demo-notice">Demo rejimi: sorğu ekranda uğurla simulyasiya edildi.</div>}<div className="confirmation-actions"><Link className="button button-primary" to={`/homes/${home.id}`}>Evə qayıt</Link><Link className="button button-ghost" to="/">Başqa evlərə bax</Link></div></section>
+  if (confirmation) return <section className="confirmation-page"><div className="confirmation-icon"><CheckCircle2 /></div><span className="eyebrow">SORĞU GÖNDƏRİLDİ</span><h1>İndi növbə brokerdədir.</h1><p>Sorğunuz <strong>#{confirmation.id}</strong> nömrəsi ilə qeydə alındı. Broker tarixləri yoxladıqdan sonra sizinlə əlaqə saxlayacaq.</p>{confirmation.demo ? <div className="demo-notice">Demo rejimi: sorğu ekranda uğurla simulyasiya edildi.</div> : <p>Status: <strong>{confirmation.statusName}</strong> · {confirmation.dates?.length ?? dates.length} gün · Cəmi <strong>{confirmation.totalAmount} ₼</strong></p>}<div className="confirmation-actions"><Link className="button button-primary" to={`/homes/${home.id}`}>Evə qayıt</Link><Link className="button button-ghost" to="/">Başqa evlərə bax</Link></div></section>
 
   return <form className="booking-form-layout" onSubmit={submit}>
     <div className="booking-form-main">
