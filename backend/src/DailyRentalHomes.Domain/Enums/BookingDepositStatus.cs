@@ -8,5 +8,7 @@ public enum BookingDepositStatus
     Expired = 4,
     Returned = 5,
     NotReturned = 6,
-    Cancelled = 7
+    Cancelled = 7,
+    ReceiptUploaded = 8,
+    Rejected = 9
 }

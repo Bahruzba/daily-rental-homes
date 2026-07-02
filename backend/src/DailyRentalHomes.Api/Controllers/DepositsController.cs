@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DailyRentalHomes.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
+[Authorize(Policy = AuthorizationPolicies.AdminOnly)]
 [Route("api/deposits")]
 public sealed class DepositsController : ControllerBase
 {

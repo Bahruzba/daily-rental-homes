@@ -20,7 +20,7 @@ public sealed class MediaFilesController : ControllerBase
         _db = db;
     }
 
-    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpGet]
     public async Task<IActionResult> GetList(CancellationToken cancellationToken)
     {
@@ -28,7 +28,7 @@ public sealed class MediaFilesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(items));
     }
 
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpPost]
     public async Task<IActionResult> Create(NewMediaFileRequest request, CancellationToken cancellationToken)
     {
@@ -55,7 +55,7 @@ public sealed class MediaFilesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { file.Id }));
     }
 
-    [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
+    [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
     [HttpDelete("{id:long}")]
     public async Task<IActionResult> Delete(long id, CancellationToken cancellationToken)
     {

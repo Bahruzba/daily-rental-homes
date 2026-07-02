@@ -12,6 +12,7 @@ public sealed class PaymentCardConfiguration : IEntityTypeConfiguration<PaymentC
         builder.HasKey(x => x.Id);
         builder.Property(x => x.CardHolderName).HasMaxLength(150).IsRequired();
         builder.Property(x => x.PanMasked).HasMaxLength(30).IsRequired();
+        builder.Property(x => x.BankName).HasMaxLength(100);
         builder.HasIndex(x => x.BrokerUserId);
 
         builder.HasOne(x => x.BrokerUser)
