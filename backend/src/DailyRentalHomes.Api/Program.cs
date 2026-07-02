@@ -113,6 +113,7 @@ if (app.Environment.IsDevelopment())
     await DbSeed.RunAsync(db);
 }
 
+app.UseStaticFiles();
 app.UseHttpsRedirection();
 if (app.Environment.IsDevelopment())
 {

@@ -120,7 +120,25 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 - GET /api/broker/bookings/{id}
 - PATCH /api/broker/bookings/{id}/status
 
-Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. The broker status endpoint accepts a stable `statusCode`, records status history, and currently allows only `pending -> waiting_deposit/cancelled` and `waiting_deposit -> confirmed/cancelled`. Cancellation keeps the existing rule that cancelled bookings do not block dates. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
+Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. The generic broker status endpoint records status history and now permits cancellation only; `waiting_deposit` and `confirmed` are controlled by the deposit request/approval endpoints. Cancellation keeps the existing rule that cancelled bookings do not block dates. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
+
+### Booking deposit flow
+
+Broker endpoints (Broker or Admin JWT, ownership-scoped for Broker):
+
+- POST /api/broker/bookings/{bookingId}/deposit/request
+- POST /api/broker/bookings/{bookingId}/deposit/approve
+- POST /api/broker/bookings/{bookingId}/deposit/reject
+
+Customer endpoints (Customer JWT, matched by booking customer/user or verified phone):
+
+- GET /api/account/bookings
+- GET /api/account/bookings/{id}
+- POST /api/account/bookings/{id}/deposit/receipt (`multipart/form-data`, field: `file`)
+
+Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+
+Development receipts are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. This local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
 
 ### Deposits
 

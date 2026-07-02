@@ -1,3 +1,5 @@
+using DailyRentalHomes.Api.Contracts.Deposits;
+
 namespace DailyRentalHomes.Api.Contracts.Broker;
 
 public sealed record BrokerSummaryResponse(
@@ -49,7 +51,7 @@ public sealed record BrokerBookingDetailResponse(
     string? Note,
     DateTime CreatedAt,
     IReadOnlyList<BrokerBookingStatusHistoryResponse> StatusHistory,
-    BrokerBookingDepositResponse? Deposit);
+    DepositResponse? Deposit);
 
 public sealed record BrokerBookingHomeResponse(long Id, string Title, string City, string? District);
 public sealed record BrokerBookingCustomerResponse(string FullName, string Phone);
@@ -59,6 +61,4 @@ public sealed record BrokerBookingStatusHistoryResponse(
     string NewStatusCode,
     string? Note,
     DateTime ChangedAt);
-public sealed record BrokerBookingDepositResponse(decimal Amount, string Status, DateTime? DeadlineAt, DateTime? PaidAt);
-
 public sealed record BrokerBookingStatusChangeResponse(long BookingId, string StatusCode, string StatusName);

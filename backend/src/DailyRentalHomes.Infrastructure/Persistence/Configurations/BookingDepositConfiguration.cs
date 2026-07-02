@@ -12,6 +12,7 @@ public sealed class BookingDepositConfiguration : IEntityTypeConfiguration<Booki
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.Note).HasMaxLength(1000);
+        builder.Property(x => x.ReviewNote).HasMaxLength(1000);
         builder.HasIndex(x => x.BookingId).IsUnique();
         builder.HasIndex(x => x.Status);
 
@@ -23,6 +24,11 @@ public sealed class BookingDepositConfiguration : IEntityTypeConfiguration<Booki
         builder.HasOne(x => x.PaymentCard)
             .WithMany()
             .HasForeignKey(x => x.PaymentCardId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        builder.HasOne(x => x.ReviewedByUser)
+            .WithMany()
+            .HasForeignKey(x => x.ReviewedByUserId)
             .OnDelete(DeleteBehavior.NoAction);
     }
 }

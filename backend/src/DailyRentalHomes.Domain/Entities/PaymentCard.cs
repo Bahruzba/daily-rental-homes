@@ -7,6 +7,7 @@ public sealed class PaymentCard : BaseEntity
     public long BrokerUserId { get; set; }
     public string CardHolderName { get; set; } = string.Empty;
     public string PanMasked { get; set; } = string.Empty;
+    public string? BankName { get; set; }
     public bool IsActive { get; set; } = true;
 
     public User? BrokerUser { get; set; }

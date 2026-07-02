@@ -1,5 +1,6 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Broker;
+using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
@@ -18,8 +19,8 @@ public sealed class BrokerController : ControllerBase
     private static readonly IReadOnlyDictionary<string, string[]> AllowedTransitions =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            [BookingStatusCodes.Pending] = [BookingStatusCodes.WaitingDeposit, BookingStatusCodes.Cancelled],
-            [BookingStatusCodes.WaitingDeposit] = [BookingStatusCodes.Confirmed, BookingStatusCodes.Cancelled]
+            [BookingStatusCodes.Pending] = [BookingStatusCodes.Cancelled],
+            [BookingStatusCodes.WaitingDeposit] = [BookingStatusCodes.Cancelled]
         };
 
     private readonly AppDbContext _db;
@@ -119,10 +120,12 @@ public sealed class BrokerController : ControllerBase
     public async Task<IActionResult> GetBookingById(long id, CancellationToken cancellationToken)
     {
         var booking = await ScopeBookings(_db.Bookings.AsNoTracking())
+            .AsSplitQuery()
             .Include(item => item.RentalHome)
             .Include(item => item.Status)
             .Include(item => item.Dates)
-            .Include(item => item.Deposit)
+            .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
+            .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.ReceiptFiles)
             .Include(item => item.StatusHistory).ThenInclude(history => history.OldStatus)
             .Include(item => item.StatusHistory).ThenInclude(history => history.NewStatus)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
@@ -233,13 +236,7 @@ public sealed class BrokerController : ControllerBase
                 item.Note,
                 item.CreatedAt))
             .ToList();
-        var deposit = booking.Deposit is null
-            ? null
-            : new BrokerBookingDepositResponse(
-                booking.Deposit.Amount,
-                booking.Deposit.Status.ToString(),
-                booking.Deposit.DeadlineAt,
-                booking.Deposit.PaidAt);
+        var deposit = booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit);
 
         return new BrokerBookingDetailResponse(
             booking.Id,
