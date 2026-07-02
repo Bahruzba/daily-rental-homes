@@ -42,9 +42,9 @@ public sealed class AuthController : ControllerBase
     [HttpPost("send")]
     public async Task<IActionResult> Send(PhoneInput input, CancellationToken cancellationToken)
     {
-        if (TextRules.Empty(input.Phone))
+        if (TextRules.Empty(input.Phone) || input.Phone.Trim().Length > 30)
         {
-            return BadRequest(ApiResponse<object>.Fail("Phone is required."));
+            return BadRequest(ApiResponse<object>.Fail("Phone is required and must not exceed 30 characters."));
         }
 
         var phone = TextRules.Clean(input.Phone);
@@ -73,11 +73,12 @@ public sealed class AuthController : ControllerBase
         _db.OutboundMessages.Add(message);
         await _db.SaveChangesAsync(cancellationToken);
 
-        object response = _environment.IsDevelopment()
-            ? new { devPin = pin }
-            : new { message = "Code sent." };
+        var response = new OtpRequestResponse(
+            "Code sent.",
+            item.ExpiresAt,
+            _environment.IsDevelopment() ? pin : null);
 
-        return Ok(ApiResponse<object>.Ok(response));
+        return Ok(ApiResponse<OtpRequestResponse>.Ok(response));
     }
 
     [AllowAnonymous]
@@ -85,9 +86,15 @@ public sealed class AuthController : ControllerBase
     [HttpPost("confirm")]
     public async Task<IActionResult> Confirm(ConfirmInput input, CancellationToken cancellationToken)
     {
-        if (TextRules.Empty(input.Phone) || TextRules.Empty(input.Pin))
+        if (TextRules.Empty(input.Phone) || input.Phone.Trim().Length > 30 ||
+            TextRules.Empty(input.Pin) || input.Pin.Length != 6 || !input.Pin.All(char.IsDigit))
         {
-            return BadRequest(ApiResponse<object>.Fail("Phone and PIN are required."));
+            return BadRequest(ApiResponse<object>.Fail("Phone and a valid 6-digit PIN are required."));
+        }
+
+        if (!TextRules.Empty(input.FullName) && input.FullName.Trim().Length > 150)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Full name must not exceed 150 characters."));
         }
 
         var phone = TextRules.Clean(input.Phone);
@@ -110,7 +117,7 @@ public sealed class AuthController : ControllerBase
 
         otp.UsedAt = DateTime.UtcNow;
 
-        var user = await _db.Users.FirstOrDefaultAsync(x => x.PhoneNumber == phone, cancellationToken);
+        var user = await _db.Users.FirstOrDefaultAsync(x => x.PhoneNumber == phone && !x.IsDeleted, cancellationToken);
         if (user is null)
         {
             user = new User
@@ -130,7 +137,12 @@ public sealed class AuthController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         var token = _accessTokenBuilder.Create(user);
-        return Ok(ApiResponse<object>.Ok(new { user.Id, user.FullName, user.PhoneNumber, user.Role, token }));
+        var response = new AuthSessionResponse(
+            token.AccessToken,
+            token.ExpiresAt,
+            new AuthUserResponse(user.Id, user.FullName, user.PhoneNumber, user.Role.ToString()));
+
+        return Ok(ApiResponse<AuthSessionResponse>.Ok(response));
     }
 
     [Authorize]

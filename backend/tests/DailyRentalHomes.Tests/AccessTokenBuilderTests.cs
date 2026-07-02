@@ -32,7 +32,7 @@ public sealed class AccessTokenBuilderTests
 
         var token = builder.Create(user);
         var tokenHandler = new JwtSecurityTokenHandler { MapInboundClaims = false };
-        var principal = tokenHandler.ValidateToken(token, new TokenValidationParameters
+        var principal = tokenHandler.ValidateToken(token.AccessToken, new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Key)),
@@ -51,5 +51,6 @@ public sealed class AccessTokenBuilderTests
         Assert.Equal("Test Broker", principal.FindFirst("name")?.Value);
         Assert.Equal("+994501112233", principal.FindFirst("phone_number")?.Value);
         Assert.Equal(nameof(UserRole.Broker), principal.FindFirst("role")?.Value);
+        Assert.True(token.ExpiresAt > DateTime.UtcNow.AddMinutes(14));
     }
 }

@@ -21,9 +21,10 @@ public sealed class AccessTokenBuilder
             SecurityAlgorithms.HmacSha256);
     }
 
-    public string Create(User user)
+    public AccessTokenResult Create(User user)
     {
         var now = DateTime.UtcNow;
+        var expiresAt = now.AddMinutes(_options.Minutes);
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -38,9 +39,9 @@ public sealed class AccessTokenBuilder
             audience: _options.Audience,
             claims: claims,
             notBefore: now,
-            expires: now.AddMinutes(_options.Minutes),
+            expires: expiresAt,
             signingCredentials: _signingCredentials);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return new AccessTokenResult(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 }
