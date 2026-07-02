@@ -93,6 +93,8 @@ build.sh
 - POST /api/auth/send
 - POST /api/auth/confirm
 
+Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik OTP yaradır və lokal yoxlama üçün cavabda `devPin` qaytarır. Bu sahə production cavabına daxil edilmir. `/api/auth/confirm` uğurlu olduqda `accessToken`, `expiresAt` və `user` məlumatlarını (`id`, `fullName`, `phone`, `role`) qaytarır. Mövcud Admin/Broker/Customer istifadəçinin rolu qorunur; yeni telefon nömrəsi Customer kimi yaradılır. Real SMS/WhatsApp provayderi bu MVP-yə daxil deyil.
+
 ### Rental Homes
 
 - GET /api/rental-homes
