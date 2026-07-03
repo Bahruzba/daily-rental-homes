@@ -1,6 +1,8 @@
-import { ClipboardList, CreditCard, Heart, Home, Settings, Users } from 'lucide-react'
+import { ClipboardList, Home, Settings, Users } from 'lucide-react'
 import { Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './auth/ProtectedRoute'
+import { AccountBookingDetailPage } from './pages/AccountBookingDetailPage'
+import { AccountDashboardPage } from './pages/AccountDashboardPage'
 import { BookingPage } from './pages/BookingPage'
 import { BrokerBookingDetailPage } from './pages/BrokerBookingDetailPage'
 import { BrokerDashboardPage } from './pages/BrokerDashboardPage'
@@ -17,12 +19,6 @@ const adminItems = [
   { title: 'Rezervasiyalar', description: 'Bütün rezervasiya sorğularının xülasəsi.', icon: ClipboardList },
   { title: 'Tənzimləmələr', description: 'Sistem parametrləri üçün ayrılmış sahə.', icon: Settings },
 ]
-const customerItems = [
-  { title: 'Rezervasiyalarım', description: 'Göndərdiyiniz sorğuların gələcək siyahısı.', icon: ClipboardList },
-  { title: 'Gözləyən ödənişlər', description: 'Ödəniş addımları üçün ayrılmış sahə.', icon: CreditCard },
-  { title: 'Seçilmiş evlər', description: 'Bəyəndiyiniz evlərin gələcək siyahısı.', icon: Heart },
-  { title: 'Paylaşılan linklər', description: 'Paylaşdığınız elanlar üçün ayrılmış sahə.', icon: Home },
-]
 
 export default function App() {
   return <Routes>
@@ -34,7 +30,8 @@ export default function App() {
     <Route path="/admin" element={<ProtectedRoute roles={['Admin']}><RoleDashboardPage role="Admin" eyebrow="ADMİN PANELİ" title="İdarəetmə xülasəsi" description="Platformanın əsas idarəetmə bölmələri." items={adminItems} /></ProtectedRoute>} />
     <Route path="/broker" element={<ProtectedRoute roles={['Broker']}><BrokerDashboardPage /></ProtectedRoute>} />
     <Route path="/broker/bookings/:id" element={<ProtectedRoute roles={['Broker']}><BrokerBookingDetailPage /></ProtectedRoute>} />
-    <Route path="/account" element={<ProtectedRoute roles={['Customer']}><RoleDashboardPage role="Customer" eyebrow="MÜŞTƏRİ HESABI" title="Səyahət planlarınız" description="Rezervasiya və seçilmiş evlər üçün şəxsi sahə." items={customerItems} /></ProtectedRoute>} />
+    <Route path="/account" element={<ProtectedRoute roles={['Customer']}><AccountDashboardPage /></ProtectedRoute>} />
+    <Route path="/account/bookings/:id" element={<ProtectedRoute roles={['Customer']}><AccountBookingDetailPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFoundPage />} />
   </Routes>
 }

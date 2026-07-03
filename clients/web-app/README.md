@@ -47,7 +47,13 @@ npm run dev
 
 Booking səhifəsi giriş tələb etmir və həm mock, həm live rejimdə işləməyə davam edir.
 
-Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür. Status əməliyyatları hazırda Pending sorğusunu beh gözləyən və ya ləğv edilmiş, beh gözləyən sorğunu isə təsdiqlənmiş və ya ləğv edilmiş vəziyyətə keçirə bilər.
+Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür. `waiting_deposit` yalnız beh sorğusu ilə, `confirmed` isə qəbz təsdiqi ilə yaranır; generic status əməliyyatı yalnız ləğv üçün istifadə olunur.
+
+## Beh axını
+
+Broker `/broker/bookings/:id` səhifəsində məbləğ, gələcək son tarix, maskalanmış kart, bank və qeyd ilə beh istəyə bilər. Customer `/account` bölməsində öz telefonuna/hesabına bağlı rezervasiyaları, `/account/bookings/:id` səhifəsində beh təlimatını görür və JPG/PNG/WebP qəbz şəkli yükləyir. Broker yüklənmiş qəbzi təsdiq və ya rədd edə bilər. Mock rejimdə eyni ekranlar və state keçidləri backend olmadan işləyir.
+
+Bu MVP real ödəniş etmir. Live receipt faylları backend-in lokal `wwwroot/uploads/deposit-receipts` qovluğunda saxlanılır. Production üçün private object storage və authorization-aware download tələb olunur. Frontend və backend yalnız maskalanmış kart dəyəri qəbul edir; tam PAN yazılmamalıdır.
 
 ## Auth saxlanması
 

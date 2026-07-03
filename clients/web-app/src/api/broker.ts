@@ -2,6 +2,7 @@ import type { ApiResponse } from '../types'
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const useLiveApi = import.meta.env.VITE_USE_LIVE_API === 'true'
+export function resolveApiAssetUrl(url: string) { return /^https?:|^blob:/i.test(url) ? url : `${baseUrl}${url}` }
 
 export type BrokerSummary = {
   totalHomes: number
@@ -55,7 +56,33 @@ export type BrokerBookingDetail = {
   note?: string | null
   createdAt: string
   statusHistory: Array<{ oldStatusCode?: string | null; newStatusCode: string; note?: string | null; changedAt: string }>
-  deposit?: { amount: number; status: string; deadlineAt?: string | null; paidAt?: string | null } | null
+  deposit?: DepositInfo | null
+}
+
+export type DepositInfo = {
+  id: number
+  amount: number
+  statusCode: string
+  deadlineAt?: string | null
+  cardHolderName?: string | null
+  cardPanMasked?: string | null
+  bankName?: string | null
+  note?: string | null
+  requestedAt: string
+  uploadedAt?: string | null
+  reviewedAt?: string | null
+  reviewNote?: string | null
+  allowReupload: boolean
+  receipt?: { id: number; fileName: string; fileUrl: string; contentType?: string | null; sizeBytes?: number | null } | null
+}
+
+export type RequestDepositPayload = {
+  amount: number
+  deadlineAt: string
+  cardHolderName?: string
+  cardPanMasked: string
+  bankName?: string
+  note?: string
 }
 
 export class BrokerRequestError extends Error {
@@ -74,6 +101,21 @@ let mockBookings: BrokerBooking[] = [
   { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false },
   { bookingId: 1002, rentalHomeId: 2, rentalHomeTitle: mockHomes[1].title, customerName: 'Murad Əliyev', customerPhone: '+994 70 444 22 11', statusCode: 'waiting_deposit', statusName: 'WaitingDeposit', totalAmount: 250, datesCount: 2, firstDate: '2026-07-19', lastDate: '2026-07-20', createdAt: '2026-07-01T16:45:00Z', isDepositPending: true },
 ]
+
+const mockDepositStorageKey = 'daily-homes-mock-deposits'
+const defaultMockDeposits: Record<number, DepositInfo | undefined> = {
+  1002: { id: 5002, amount: 75, statusCode: 'requested', deadlineAt: '2026-07-10T18:00:00Z', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
+}
+
+function readMockDeposits() {
+  try { return { ...defaultMockDeposits, ...JSON.parse(window.localStorage.getItem(mockDepositStorageKey) ?? '{}') } }
+  catch { return { ...defaultMockDeposits } }
+}
+
+export const mockDeposits: Record<number, DepositInfo | undefined> = readMockDeposits()
+export function persistMockDeposits() { window.localStorage.setItem(mockDepositStorageKey, JSON.stringify(mockDeposits)) }
+
+export function getMockBrokerBookings() { return mockBookings }
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response
@@ -133,10 +175,46 @@ export async function getBrokerBooking(id: number, token: string): Promise<Broke
       note: booking.note,
       createdAt: booking.createdAt,
       statusHistory: [],
-      deposit: null,
+      deposit: mockDeposits[id] ?? null,
     }
   }
   return request(`/api/broker/bookings/${id}`, token)
+}
+
+export async function requestBrokerDeposit(id: number, payload: RequestDepositPayload, token: string): Promise<DepositInfo> {
+  if (!useLiveApi) {
+    if (mockDeposits[id]) throw new BrokerRequestError('Bu rezervasiya üçün artıq beh sorğusu var.')
+    const deposit: DepositInfo = { id: 5000 + id, ...payload, statusCode: 'requested', requestedAt: new Date().toISOString(), allowReupload: true, receipt: null }
+    mockDeposits[id] = deposit
+    persistMockDeposits()
+    await changeBrokerBookingStatus(id, 'waiting_deposit', token)
+    return deposit
+  }
+  return request(`/api/broker/bookings/${id}/deposit/request`, token, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function approveBrokerDeposit(id: number, token: string, note?: string): Promise<DepositInfo> {
+  if (!useLiveApi) {
+    const deposit = mockDeposits[id]
+    if (!deposit?.receipt) throw new BrokerRequestError('Təsdiq üçün qəbz yüklənməlidir.')
+    deposit.statusCode = 'approved'; deposit.reviewedAt = new Date().toISOString(); deposit.reviewNote = note; deposit.allowReupload = false
+    const booking = mockBookings.find((item) => item.bookingId === id)
+    if (booking) { booking.statusCode = 'confirmed'; booking.statusName = 'Confirmed' }
+    persistMockDeposits()
+    return deposit
+  }
+  return request(`/api/broker/bookings/${id}/deposit/approve`, token, { method: 'POST', body: JSON.stringify({ note }) })
+}
+
+export async function rejectBrokerDeposit(id: number, token: string, note?: string): Promise<DepositInfo> {
+  if (!useLiveApi) {
+    const deposit = mockDeposits[id]
+    if (!deposit?.receipt) throw new BrokerRequestError('Rədd etmək üçün qəbz yüklənməlidir.')
+    deposit.statusCode = 'rejected'; deposit.reviewedAt = new Date().toISOString(); deposit.reviewNote = note; deposit.allowReupload = true
+    persistMockDeposits()
+    return deposit
+  }
+  return request(`/api/broker/bookings/${id}/deposit/reject`, token, { method: 'POST', body: JSON.stringify({ note, allowReupload: true }) })
 }
 
 export async function changeBrokerBookingStatus(id: number, statusCode: string, token: string) {

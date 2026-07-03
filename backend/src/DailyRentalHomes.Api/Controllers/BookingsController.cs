@@ -143,9 +143,16 @@ public sealed class BookingsController : ControllerBase
                 $"Booking date conflict: {string.Join(", ", conflictingDates.Select(date => date.ToString("yyyy-MM-dd")))}."));
         }
 
+        var customerUserId = await _db.Users
+            .AsNoTracking()
+            .Where(user => user.PhoneNumber == TextRules.Clean(request.Phone) && user.IsActive)
+            .Select(user => (long?)user.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var booking = new Booking
         {
             RentalHomeId = request.RentalHomeId,
+            CustomerUserId = customerUserId,
             CustomerFullName = TextRules.Clean(request.Name),
             CustomerPhoneNumber = TextRules.Clean(request.Phone),
             GuestCount = request.Guests,
