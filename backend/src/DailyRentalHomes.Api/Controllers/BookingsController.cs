@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Bookings;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -15,10 +16,12 @@ namespace DailyRentalHomes.Api.Controllers;
 public sealed class BookingsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly INotificationOutboxService _notifications;
 
-    public BookingsController(AppDbContext db)
+    public BookingsController(AppDbContext db, INotificationOutboxService notifications)
     {
         _db = db;
+        _notifications = notifications;
     }
 
     [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
@@ -169,6 +172,8 @@ public sealed class BookingsController : ControllerBase
 
         _db.Bookings.Add(booking);
         await _db.SaveChangesAsync(cancellationToken);
+        await _notifications.QueueBookingCreatedAsync(booking, rentalHome, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
 
         var response = new BookingCreatedResponse(
             booking.Id,
@@ -204,6 +209,10 @@ public sealed class BookingsController : ControllerBase
 
         var oldStatusId = booking.StatusId;
         booking.StatusId = request.NewStatusId;
+        var newStatusCode = await _db.BookingStatuses.AsNoTracking()
+            .Where(status => status.Id == request.NewStatusId)
+            .Select(status => status.Code)
+            .FirstOrDefaultAsync(cancellationToken) ?? request.NewStatusId.ToString();
 
         _db.BookingStatusHistory.Add(new BookingStatusHistory
         {
@@ -214,6 +223,7 @@ public sealed class BookingsController : ControllerBase
             Note = TextRules.CleanOptional(request.Note)
         });
 
+        await _notifications.QueueBookingStatusChangedAsync(booking, newStatusCode, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<object>.Ok(new { booking.Id, booking.StatusId }));
     }

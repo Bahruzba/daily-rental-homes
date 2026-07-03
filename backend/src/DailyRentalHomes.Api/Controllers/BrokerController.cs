@@ -2,6 +2,7 @@ using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Broker;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -24,10 +25,12 @@ public sealed class BrokerController : ControllerBase
         };
 
     private readonly AppDbContext _db;
+    private readonly INotificationOutboxService _notifications;
 
-    public BrokerController(AppDbContext db)
+    public BrokerController(AppDbContext db, INotificationOutboxService notifications)
     {
         _db = db;
+        _notifications = notifications;
     }
 
     [HttpGet("summary")]
@@ -187,6 +190,7 @@ public sealed class BrokerController : ControllerBase
             Note = TextRules.CleanOptional(request.Note)
         });
 
+        await _notifications.QueueBookingStatusChangedAsync(booking, targetStatus.Code, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         var response = new BrokerBookingStatusChangeResponse(booking.Id, targetStatus.Code, targetStatus.Name);
         return Ok(ApiResponse<BrokerBookingStatusChangeResponse>.Ok(response));

@@ -10,14 +10,26 @@ public sealed class OutboundMessageConfiguration : IEntityTypeConfiguration<Outb
     {
         builder.ToTable("outbound_messages");
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.RecipientName).HasMaxLength(150);
+        builder.Property(x => x.TypeCode).HasMaxLength(100).IsRequired();
+        builder.Property(x => x.Title).HasMaxLength(250).IsRequired();
         builder.Property(x => x.To).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Text).HasMaxLength(2000).IsRequired();
         builder.Property(x => x.ProviderMessageId).HasMaxLength(200);
         builder.Property(x => x.ErrorMessage).HasMaxLength(1000);
+        builder.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)");
         builder.HasIndex(x => x.Channel);
         builder.HasIndex(x => x.Status);
+        builder.HasIndex(x => x.TypeCode);
+        builder.HasIndex(x => x.RecipientUserId);
+        builder.HasIndex(x => x.ScheduledAt);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.BookingDepositId);
+
+        builder.HasOne(x => x.RecipientUser)
+            .WithMany()
+            .HasForeignKey(x => x.RecipientUserId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         builder.HasOne(x => x.Booking)
             .WithMany()

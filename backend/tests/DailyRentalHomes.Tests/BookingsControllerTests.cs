@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Bookings;
 using DailyRentalHomes.Api.Controllers;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -16,7 +17,7 @@ public sealed class BookingsControllerTests
     {
         await using var context = CreateContext();
         await SeedBaseData(context);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1, new DateOnly(2026, 7, 14), new DateOnly(2026, 7, 12)), default);
 
@@ -24,6 +25,9 @@ public sealed class BookingsControllerTests
         var booking = await context.Bookings.Include(item => item.Dates).SingleAsync();
         Assert.Equal(booking.Id, response.BookingId);
         Assert.Equal([new DateOnly(2026, 7, 12), new DateOnly(2026, 7, 14)], booking.Dates.OrderBy(item => item.Date).Select(item => item.Date));
+        var notification = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(NotificationTypeCodes.BookingCreated, notification.TypeCode);
+        Assert.Equal(100, notification.RecipientUserId);
     }
 
     [Fact]
@@ -31,7 +35,7 @@ public sealed class BookingsControllerTests
     {
         await using var context = CreateContext();
         await SeedBaseData(context, dailyPrice: 125m);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1, new DateOnly(2026, 7, 12), new DateOnly(2026, 7, 13), new DateOnly(2026, 7, 14)), default);
 
@@ -46,7 +50,7 @@ public sealed class BookingsControllerTests
     {
         await using var context = CreateContext();
         await SeedBaseData(context, pendingStatusId: 42);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1, new DateOnly(2026, 7, 12)), default);
 
@@ -62,7 +66,7 @@ public sealed class BookingsControllerTests
         await using var context = CreateContext();
         await SeedBaseData(context);
         await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 11));
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1, new DateOnly(2026, 7, 11)), default);
 
@@ -77,7 +81,7 @@ public sealed class BookingsControllerTests
         await using var context = CreateContext();
         await SeedBaseData(context);
         await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 11));
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(2, new DateOnly(2026, 7, 11)), default);
 
@@ -90,7 +94,7 @@ public sealed class BookingsControllerTests
     {
         await using var context = CreateContext();
         await SeedBaseData(context);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1), default);
 
@@ -104,7 +108,7 @@ public sealed class BookingsControllerTests
     {
         await using var context = CreateContext();
         await SeedBaseData(context);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
         var date = new DateOnly(2026, 7, 12);
 
         var result = await controller.Create(Request(1, date, date), default);
@@ -123,7 +127,7 @@ public sealed class BookingsControllerTests
         context.BookingStatuses.Add(cancelled);
         await context.SaveChangesAsync();
         await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 11), cancelled.Id);
-        var controller = new BookingsController(context);
+        var controller = Controller(context);
 
         var result = await controller.Create(Request(1, new DateOnly(2026, 7, 11)), default);
 
@@ -138,6 +142,9 @@ public sealed class BookingsControllerTests
         return new AppDbContext(options);
     }
 
+    private static BookingsController Controller(AppDbContext context) =>
+        new(context, new NotificationOutboxService(context));
+
     private static async Task SeedBaseData(AppDbContext context, decimal dailyPrice = 100m, long pendingStatusId = 41)
     {
         context.BookingStatuses.Add(new BookingStatus
@@ -146,6 +153,13 @@ public sealed class BookingsControllerTests
             Name = "Pending",
             Code = BookingStatusCodes.Pending,
             SortOrder = 1
+        });
+        context.Users.Add(new User
+        {
+            Id = 100,
+            FullName = "Test Broker",
+            PhoneNumber = "+994501000100",
+            Role = DailyRentalHomes.Domain.Enums.UserRole.Broker
         });
         context.RentalHomes.AddRange(
             Home(1, dailyPrice),

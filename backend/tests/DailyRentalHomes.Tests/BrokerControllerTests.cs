@@ -3,6 +3,7 @@ using DailyRentalHomes.Api.Contracts.Bookings;
 using DailyRentalHomes.Api.Contracts.Broker;
 using DailyRentalHomes.Api.Controllers;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
@@ -117,6 +118,8 @@ public sealed class BrokerControllerTests
         var history = await context.BookingStatusHistory.SingleAsync();
         Assert.Equal(10, history.ChangedByUserId);
         Assert.Equal("Customer request", history.Note);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item =>
+            item.TypeCode == NotificationTypeCodes.BookingStatusChanged && item.BookingId == 1001);
     }
 
     [Fact]
@@ -129,7 +132,7 @@ public sealed class BrokerControllerTests
             1001,
             new ChangeBrokerBookingStatusRequest { StatusCode = BookingStatusCodes.Cancelled },
             default);
-        var publicBookingsController = new BookingsController(context);
+        var publicBookingsController = new BookingsController(context, new NotificationOutboxService(context));
 
         var result = await publicBookingsController.Create(new NewBookingRequest
         {
@@ -200,7 +203,7 @@ public sealed class BrokerControllerTests
 
     private static BrokerController CreateController(AppDbContext context, long brokerId)
     {
-        return new BrokerController(context)
+        return new BrokerController(context, new NotificationOutboxService(context))
         {
             ControllerContext = new ControllerContext
             {

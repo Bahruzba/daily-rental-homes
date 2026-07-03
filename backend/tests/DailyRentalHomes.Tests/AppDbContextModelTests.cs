@@ -29,6 +29,12 @@ public sealed class AppDbContextModelTests
         var table = StoreObjectIdentifier.Table("bookings", null);
         Assert.Equal("customer_phone_number", entity.FindProperty(nameof(Booking.CustomerPhoneNumber))?.GetColumnName(table));
         Assert.Equal("created_by_user_id", entity.FindProperty(nameof(BaseEntity.CreatedByUserId))?.GetColumnName(table));
+
+        var notification = context.Model.FindEntityType(typeof(OutboundMessage));
+        var notificationTable = StoreObjectIdentifier.Table("outbound_messages", null);
+        Assert.Equal("outbound_messages", notification?.GetTableName());
+        Assert.Equal("recipient_user_id", notification?.FindProperty(nameof(OutboundMessage.RecipientUserId))?.GetColumnName(notificationTable));
+        Assert.Equal("type_code", notification?.FindProperty(nameof(OutboundMessage.TypeCode))?.GetColumnName(notificationTable));
     }
 
     [Fact]

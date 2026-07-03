@@ -3,6 +3,7 @@ using DailyRentalHomes.Api.Contracts.Messages;
 using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DailyRentalHomes.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]
+[Authorize(Policy = AuthorizationPolicies.AdminOnly)]
 [Route("api/messages")]
 public sealed class MessagesController : ControllerBase
 {
@@ -45,6 +46,8 @@ public sealed class MessagesController : ControllerBase
         var providerId = await _messageSender.SendAsync(request.Channel, to, text, cancellationToken);
         var item = new OutboundMessage
         {
+            TypeCode = NotificationTypeCodes.ManualMessage,
+            Title = "Manual message",
             Channel = request.Channel,
             Status = MessageStatus.Sent,
             To = to,
