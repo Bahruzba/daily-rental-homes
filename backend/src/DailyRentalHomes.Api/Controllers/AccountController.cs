@@ -2,6 +2,7 @@ using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Account;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -27,11 +28,13 @@ public sealed class AccountController : ControllerBase
 
     private readonly AppDbContext _db;
     private readonly IWebHostEnvironment _environment;
+    private readonly INotificationOutboxService _notifications;
 
-    public AccountController(AppDbContext db, IWebHostEnvironment environment)
+    public AccountController(AppDbContext db, IWebHostEnvironment environment, INotificationOutboxService notifications)
     {
         _db = db;
         _environment = environment;
+        _notifications = notifications;
     }
 
     [HttpGet("bookings")]
@@ -148,6 +151,7 @@ public sealed class AccountController : ControllerBase
 
         try
         {
+            await _notifications.QueueDepositReceiptUploadedAsync(booking, deposit, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
         }
         catch

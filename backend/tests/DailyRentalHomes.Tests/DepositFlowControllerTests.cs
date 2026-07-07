@@ -4,6 +4,7 @@ using DailyRentalHomes.Api.Contracts.Bookings;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Controllers;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
@@ -34,6 +35,9 @@ public sealed class DepositFlowControllerTests
         Assert.Equal(DepositStatusCodes.Requested, response.StatusCode);
         Assert.Equal("**** **** **** 1234", response.CardPanMasked);
         Assert.Equal(10, (await context.BookingDeposits.SingleAsync()).CreatedByUserId);
+        var notifications = await context.OutboundMessages.OrderBy(item => item.ScheduledAt).ToListAsync();
+        Assert.Contains(notifications, item => item.TypeCode == NotificationTypeCodes.DepositRequested && item.RecipientUserId == 30);
+        Assert.Contains(notifications, item => item.TypeCode == NotificationTypeCodes.DepositDeadlineReminder && item.ScheduledAt < response.DeadlineAt);
     }
 
     [Fact]
@@ -139,6 +143,7 @@ public sealed class DepositFlowControllerTests
         var media = await context.MediaFiles.SingleAsync();
         Assert.Equal(MediaFileType.DepositReceipt, media.FileType);
         Assert.True(File.Exists(Path.Combine(environment.WebRootPath, media.FileUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))));
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.TypeCode == NotificationTypeCodes.DepositReceiptUploaded && item.RecipientUserId == 10);
     }
 
     [Fact]
@@ -154,6 +159,7 @@ public sealed class DepositFlowControllerTests
         Assert.Equal(DepositStatusCodes.Approved, response.StatusCode);
         Assert.Equal(3, (await context.Bookings.SingleAsync(item => item.Id == 1001)).StatusId);
         Assert.NotNull((await context.BookingDeposits.SingleAsync()).ReviewedAt);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.TypeCode == NotificationTypeCodes.DepositApproved && item.RecipientUserId == 30);
     }
 
     [Fact]
@@ -169,6 +175,7 @@ public sealed class DepositFlowControllerTests
         Assert.Equal(DepositStatusCodes.Rejected, response.StatusCode);
         Assert.True(response.AllowReupload);
         Assert.Equal(2, (await context.Bookings.SingleAsync(item => item.Id == 1001)).StatusId);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.TypeCode == NotificationTypeCodes.DepositRejected && item.RecipientUserId == 30);
     }
 
     [Fact]
@@ -192,7 +199,7 @@ public sealed class DepositFlowControllerTests
         await AddUploadedDeposit(context, 1001);
         var brokerController = BrokerController(context, 10);
         await brokerController.Reject(1001, new ReviewBookingDepositInput(), default);
-        var publicController = new BookingsController(context);
+        var publicController = new BookingsController(context, new NotificationOutboxService(context));
 
         var result = await publicController.Create(new NewBookingRequest
         {
@@ -260,12 +267,12 @@ public sealed class DepositFlowControllerTests
         await context.SaveChangesAsync();
     }
 
-    private static BrokerDepositsController BrokerController(AppDbContext context, long userId) => new(context)
+    private static BrokerDepositsController BrokerController(AppDbContext context, long userId) => new(context, new NotificationOutboxService(context))
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Broker) } }
     };
 
-    private static AccountController AccountController(AppDbContext context, IWebHostEnvironment environment, long userId) => new(context, environment)
+    private static AccountController AccountController(AppDbContext context, IWebHostEnvironment environment, long userId) => new(context, environment, new NotificationOutboxService(context))
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Customer) } }
     };

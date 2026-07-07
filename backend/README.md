@@ -153,6 +153,16 @@ Development receipts are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/
 - GET /api/messages
 - POST /api/messages
 
+### Notification outbox
+
+- GET /api/admin/notifications (Admin JWT)
+
+The existing `outbound_messages` table is reused as the MVP notification outbox. Booking creation, deposit request, receipt upload, deposit approval/rejection, and broker booking-status changes create `pending` records; no real WhatsApp or SMS provider sends these notifications yet. Records use stable channel (`whatsapp`, `sms`, `in_app`), type, and status (`pending`, `sent`, `failed`, `cancelled`, `skipped`) codes. The Admin endpoint supports optional `status`, `type`, and `bookingId` filters.
+
+When a deposit is requested, an immediate `deposit_requested` record is created. If the deadline is more than three hours away, `deposit_deadline_reminder` is scheduled two hours before it. If it is between 30 minutes and three hours away, the reminder is scheduled 30 minutes before it; closer deadlines skip the reminder.
+
+Production still requires a real WhatsApp/SMS provider worker, retry/backoff and idempotency strategy, delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
+
 ### Dictionaries and related data
 
 - GET /api/payment-cards

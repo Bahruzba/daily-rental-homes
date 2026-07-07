@@ -14,6 +14,7 @@ public interface IAppDbContext
     DbSet<BookingDeposit> BookingDeposits { get; }
     DbSet<BookingStatus> BookingStatuses { get; }
     DbSet<PaymentCard> PaymentCards { get; }
+    DbSet<OutboundMessage> OutboundMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

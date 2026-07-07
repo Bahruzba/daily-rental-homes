@@ -99,6 +99,7 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 builder.Services.AddSingleton<AccessTokenBuilder>();
+builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();

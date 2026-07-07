@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
@@ -17,10 +18,12 @@ namespace DailyRentalHomes.Api.Controllers;
 public sealed class BrokerDepositsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly INotificationOutboxService _notifications;
 
-    public BrokerDepositsController(AppDbContext db)
+    public BrokerDepositsController(AppDbContext db, INotificationOutboxService notifications)
     {
         _db = db;
+        _notifications = notifications;
     }
 
     [HttpPost("request")]
@@ -52,6 +55,7 @@ public sealed class BrokerDepositsController : ControllerBase
         }
 
         var booking = await ScopeBookings(_db.Bookings)
+            .Include(item => item.RentalHome)
             .Include(item => item.Status)
             .Include(item => item.Deposit)
             .FirstOrDefaultAsync(item => item.Id == bookingId, cancellationToken);
@@ -110,6 +114,8 @@ public sealed class BrokerDepositsController : ControllerBase
         }
 
         await _db.SaveChangesAsync(cancellationToken);
+        await _notifications.QueueDepositRequestedAsync(booking, deposit, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit)));
     }
 
@@ -151,6 +157,7 @@ public sealed class BrokerDepositsController : ControllerBase
         booking.Deposit.AllowReupload = false;
         AddBookingStatusHistory(booking, confirmedStatus, input.Note ?? "Deposit approved.", userId);
 
+        await _notifications.QueueDepositApprovedAsync(booking, booking.Deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit)));
     }
@@ -183,12 +190,14 @@ public sealed class BrokerDepositsController : ControllerBase
         booking.Deposit.ReviewNote = TextRules.CleanOptional(input.Note);
         booking.Deposit.AllowReupload = input.AllowReupload;
 
+        await _notifications.QueueDepositRejectedAsync(booking, booking.Deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit)));
     }
 
     private async Task<Booking?> GetBookingWithDeposit(long bookingId, CancellationToken cancellationToken) =>
         await ScopeBookings(_db.Bookings)
+            .Include(item => item.RentalHome)
             .Include(item => item.Status)
             .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
             .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.ReceiptFiles)

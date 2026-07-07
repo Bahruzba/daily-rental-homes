@@ -4,6 +4,7 @@ using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Application.Abstractions.Messaging;
 using DailyRentalHomes.Domain.Entities;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -61,6 +62,8 @@ public sealed class AuthController : ControllerBase
 
         var message = new OutboundMessage
         {
+            TypeCode = NotificationTypeCodes.OtpCode,
+            Title = "Giriş kodu",
             Channel = MessageChannel.WhatsApp,
             Status = MessageStatus.Sent,
             To = phone,

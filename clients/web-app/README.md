@@ -55,6 +55,8 @@ Broker `/broker/bookings/:id` səhifəsində məbləğ, gələcək son tarix, ma
 
 Bu MVP real ödəniş etmir. Live receipt faylları backend-in lokal `wwwroot/uploads/deposit-receipts` qovluğunda saxlanılır. Production üçün private object storage və authorization-aware download tələb olunur. Frontend və backend yalnız maskalanmış kart dəyəri qəbul edir; tam PAN yazılmamalıdır.
 
+Beh əməliyyatlarından sonra frontend bildirişin növbəyə alındığını göstərir. Mock rejimdə bu mesaj lokal simulyasiya olunur; live rejimdə backend `outbound_messages` cədvəlinə qeyd yazır. Bu MVP-də tam notification UI və real WhatsApp/SMS provider yoxdur.
+
 ## Auth saxlanması
 
 JWT və istifadəçi məlumatı MVP üçün `localStorage`-da saxlanılır. Bu, yalnız ilkin MVP yanaşmasıdır; production təhlükəsizliyi üçün daha sonra HttpOnly cookie və uyğun sessiya strategiyası nəzərdən keçirilməlidir.
