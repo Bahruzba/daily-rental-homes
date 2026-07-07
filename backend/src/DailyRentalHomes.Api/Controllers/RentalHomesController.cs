@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.RentalHomes;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -52,7 +53,8 @@ public sealed class RentalHomesController : ControllerBase
         var item = await _db.RentalHomes
             .AsNoTracking()
             .Where(x => x.Id == id && !x.IsDeleted && x.IsPublished)
-            .Select(x => new RentalHomeDetailResponse(
+            .Select(x => new
+            {
                 x.Id,
                 x.Title,
                 x.Description,
@@ -63,17 +65,60 @@ public sealed class RentalHomesController : ControllerBase
                 x.RoomCount,
                 x.GuestCount,
                 x.IsPublished,
-                x.MediaFiles
+                MediaFiles = x.MediaFiles
                     .Where(media => !media.IsDeleted && media.FileType == DailyRentalHomes.Domain.Enums.MediaFileType.HomeImage)
                     .OrderBy(media => media.SortOrder)
                     .Select(media => new RentalHomeMediaResponse(media.FileUrl, media.SortOrder))
                     .ToList(),
-                x.Contacts
+                Contacts = x.Contacts
                     .Select(contact => new RentalHomeContactResponse(contact.FullName, contact.Value, (int)contact.ContactType))
-                    .ToList()))
+                    .ToList()
+            })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return item is null ? NotFound(ApiResponse<object>.Fail("Rental home not found.")) : Ok(ApiResponse<object>.Ok(item));
+        if (item is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+        }
+
+        var manualRanges = await _db.RentalHomeAvailabilityBlocks
+            .AsNoTracking()
+            .Where(block => !block.IsDeleted && block.RentalHomeId == id)
+            .Select(block => new RentalHomeUnavailableRangeResponse(block.StartDate, block.EndDate))
+            .ToListAsync(cancellationToken);
+        var bookingRanges = await _db.Bookings
+            .AsNoTracking()
+            .Where(booking =>
+                !booking.IsDeleted &&
+                booking.RentalHomeId == id &&
+                booking.Status != null &&
+                booking.Status.Code != BookingStatusCodes.Cancelled &&
+                booking.Status.Code != BookingStatusCodes.Rejected)
+            .SelectMany(booking => booking.Dates.Where(date => !date.IsDeleted))
+            .Select(date => new RentalHomeUnavailableRangeResponse(date.Date, date.Date))
+            .ToListAsync(cancellationToken);
+        var unavailableRanges = manualRanges
+            .Concat(bookingRanges)
+            .OrderBy(range => range.StartDate)
+            .ThenBy(range => range.EndDate)
+            .ToList();
+
+        var response = new RentalHomeDetailResponse(
+            item.Id,
+            item.Title,
+            item.Description,
+            item.City,
+            item.District,
+            item.Address,
+            item.DailyPrice,
+            item.RoomCount,
+            item.GuestCount,
+            item.IsPublished,
+            item.MediaFiles,
+            item.Contacts,
+            unavailableRanges);
+
+        return Ok(ApiResponse<object>.Ok(response));
     }
 
     [Authorize(Policy = AuthorizationPolicies.BrokerOrAdmin)]

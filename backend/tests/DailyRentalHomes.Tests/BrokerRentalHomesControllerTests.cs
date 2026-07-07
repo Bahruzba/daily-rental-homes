@@ -198,6 +198,120 @@ public sealed class BrokerRentalHomesControllerTests
     }
 
     [Fact]
+    public async Task BrokerCanAddAvailabilityBlockForOwnRentalHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.AddAvailabilityBlock(
+            101,
+            new BrokerAvailabilityBlockRequest(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Owner stay"),
+            default);
+        var response = GetData<BrokerAvailabilityBlockResponse>(result);
+
+        Assert.Equal(new DateOnly(2026, 8, 1), response.StartDate);
+        Assert.Equal("Owner stay", response.Note);
+        var block = await context.RentalHomeAvailabilityBlocks.SingleAsync();
+        Assert.Equal(101, block.RentalHomeId);
+        Assert.Equal(10, block.CreatedByUserId);
+    }
+
+    [Fact]
+    public async Task BrokerCannotAddAvailabilityBlockForAnotherBrokersHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.AddAvailabilityBlock(
+            102,
+            new BrokerAvailabilityBlockRequest(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), null),
+            default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Empty(await context.RentalHomeAvailabilityBlocks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task BrokerCanDeleteOwnAvailabilityBlock()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Private"));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.DeleteAvailabilityBlock(101, 301, default);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.True((await context.RentalHomeAvailabilityBlocks.IgnoreQueryFilters().SingleAsync(item => item.Id == 301)).IsDeleted);
+    }
+
+    [Fact]
+    public async Task PublicDetailIncludesUnavailableRangesWithoutBrokerNotes()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Private broker note"));
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var detail = GetObjectData<RentalHomeDetailResponse>(await controller.GetById(101, default));
+
+        var range = Assert.Single(detail.UnavailableRanges);
+        Assert.Equal(new DateOnly(2026, 8, 1), range.StartDate);
+        Assert.Equal(new DateOnly(2026, 8, 3), range.EndDate);
+        Assert.DoesNotContain(detail.GetType().GetProperties(), property => property.Name.Contains("Note", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task PublicDetailIncludesExistingBookingDatesAsUnavailableRanges()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingStatuses.Add(new BookingStatus { Id = 401, Name = "Confirmed", Code = DailyRentalHomes.Domain.Constants.BookingStatusCodes.Confirmed, SortOrder = 1 });
+        context.Bookings.Add(new Booking
+        {
+            Id = 501,
+            RentalHomeId = 101,
+            CustomerFullName = "Existing Customer",
+            CustomerPhoneNumber = "+994501111111",
+            GuestCount = 2,
+            DailyPrice = 120m,
+            TotalAmount = 240m,
+            StatusId = 401,
+            Dates =
+            [
+                new BookingDate { Date = new DateOnly(2026, 8, 4) },
+                new BookingDate { Date = new DateOnly(2026, 8, 5) }
+            ]
+        });
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var detail = GetObjectData<RentalHomeDetailResponse>(await controller.GetById(101, default));
+
+        Assert.Contains(detail.UnavailableRanges, range => range.StartDate == new DateOnly(2026, 8, 4) && range.EndDate == new DateOnly(2026, 8, 4));
+        Assert.Contains(detail.UnavailableRanges, range => range.StartDate == new DateOnly(2026, 8, 5) && range.EndDate == new DateOnly(2026, 8, 5));
+    }
+
+    [Fact]
+    public async Task BrokerDetailIncludesAvailabilityBlocks()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Private"));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var detail = GetData<BrokerRentalHomeDetailResponse>(await controller.GetById(101, default));
+
+        var block = Assert.Single(detail.AvailabilityBlocks);
+        Assert.Equal("Private", block.Note);
+    }
+
+    [Fact]
     public async Task PublicListExcludesUnpublishedHomes()
     {
         await using var context = CreateContext();
@@ -294,6 +408,7 @@ public sealed class BrokerRentalHomesControllerTests
         Assert.IsType<NotFoundObjectResult>(await controller.Update(101, ValidRequest("Should not update"), default));
         Assert.IsType<NotFoundObjectResult>(await controller.Publish(101, default));
         Assert.IsType<NotFoundObjectResult>(await controller.UploadMedia(101, ImageFile("home.webp", "image/webp"), default));
+        Assert.IsType<NotFoundObjectResult>(await controller.AddAvailabilityBlock(101, new BrokerAvailabilityBlockRequest(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 2), null), default));
     }
 
     private static AppDbContext CreateContext()
@@ -344,6 +459,15 @@ public sealed class BrokerRentalHomesControllerTests
         ContentType = "image/webp",
         SizeBytes = 100,
         SortOrder = sortOrder
+    };
+
+    private static RentalHomeAvailabilityBlock Block(long id, long homeId, DateOnly startDate, DateOnly endDate, string? note) => new()
+    {
+        Id = id,
+        RentalHomeId = homeId,
+        StartDate = startDate,
+        EndDate = endDate,
+        Note = note
     };
 
     private static BrokerRentalHomeSaveRequest ValidRequest(string title) => new(

@@ -79,6 +79,8 @@ Frontend login route is `/login`. Mock mode uses OTP `123456` and allows selecti
 
 Broker users can manage their own rental homes from `/broker`: create/edit draft homes, publish/unpublish, upload JPG/PNG/WebP images up to 5 MB, set the main image, and delete images. In live mode this uses `/api/broker/rental-homes...` endpoints with the Broker JWT. Uploaded development images are served from `/uploads/rental-homes/...`.
 
+Broker users can also block unavailable date ranges for their own homes. Public detail exposes unavailable ranges without broker notes, and booking creation rejects blocked or already-booked dates.
+
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.

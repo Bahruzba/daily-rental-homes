@@ -66,6 +66,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
         var home = await OwnHomes()
             .AsNoTracking()
             .Include(item => item.MediaFiles)
+            .Include(item => item.AvailabilityBlocks)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
 
         if (home is null) return NotFound(ApiResponse<object>.Fail("Rental home not found."));
@@ -202,6 +203,75 @@ public sealed class BrokerRentalHomesController : ControllerBase
         return Ok(ApiResponse<object>.Ok(new { media.Id }));
     }
 
+    [HttpGet("{id:long}/availability-blocks")]
+    public async Task<IActionResult> GetAvailabilityBlocks(long id, CancellationToken cancellationToken)
+    {
+        var homeExists = await OwnHomes().AnyAsync(item => item.Id == id, cancellationToken);
+        if (!homeExists) return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+
+        var blocks = await _db.RentalHomeAvailabilityBlocks
+            .AsNoTracking()
+            .Where(item => item.RentalHomeId == id && !item.IsDeleted)
+            .OrderBy(item => item.StartDate)
+            .ThenBy(item => item.EndDate)
+            .Select(item => new BrokerAvailabilityBlockResponse(
+                item.Id,
+                item.StartDate,
+                item.EndDate,
+                item.Note,
+                item.CreatedAt))
+            .ToListAsync(cancellationToken);
+
+        return Ok(ApiResponse<IReadOnlyList<BrokerAvailabilityBlockResponse>>.Ok(blocks));
+    }
+
+    [HttpPost("{id:long}/availability-blocks")]
+    public async Task<IActionResult> AddAvailabilityBlock(
+        long id,
+        BrokerAvailabilityBlockRequest request,
+        CancellationToken cancellationToken)
+    {
+        var validation = ValidateAvailabilityBlock(request);
+        if (validation is not null) return BadRequest(ApiResponse<object>.Fail(validation));
+
+        var homeExists = await OwnHomes().AnyAsync(item => item.Id == id, cancellationToken);
+        if (!homeExists) return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+
+        var block = new RentalHomeAvailabilityBlock
+        {
+            RentalHomeId = id,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            Note = TextRules.CleanOptional(request.Note),
+            CreatedByUserId = User.GetUserId()
+        };
+        _db.RentalHomeAvailabilityBlocks.Add(block);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<BrokerAvailabilityBlockResponse>.Ok(new BrokerAvailabilityBlockResponse(
+            block.Id,
+            block.StartDate,
+            block.EndDate,
+            block.Note,
+            block.CreatedAt)));
+    }
+
+    [HttpDelete("{id:long}/availability-blocks/{blockId:long}")]
+    public async Task<IActionResult> DeleteAvailabilityBlock(long id, long blockId, CancellationToken cancellationToken)
+    {
+        var block = await OwnHomes()
+            .Where(home => home.Id == id)
+            .SelectMany(home => home.AvailabilityBlocks)
+            .FirstOrDefaultAsync(item => item.Id == blockId && !item.IsDeleted, cancellationToken);
+        if (block is null) return NotFound(ApiResponse<object>.Fail("Availability block not found."));
+
+        block.IsDeleted = true;
+        block.UpdatedByUserId = User.GetUserId();
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<object>.Ok(new { block.Id }));
+    }
+
     [HttpPatch("{id:long}/media/{mediaId:long}/main")]
     public async Task<IActionResult> SetMainMedia(long id, long mediaId, CancellationToken cancellationToken)
     {
@@ -271,6 +341,17 @@ public sealed class BrokerRentalHomesController : ControllerBase
                 .OrderBy(item => item.SortOrder)
                 .Select(ToMediaResponse)
                 .ToList(),
+            home.AvailabilityBlocks
+                .Where(item => !item.IsDeleted)
+                .OrderBy(item => item.StartDate)
+                .ThenBy(item => item.EndDate)
+                .Select(item => new BrokerAvailabilityBlockResponse(
+                    item.Id,
+                    item.StartDate,
+                    item.EndDate,
+                    item.Note,
+                    item.CreatedAt))
+                .ToList(),
             bookingCount,
             upcomingBookingCount,
             home.CreatedAt,
@@ -315,6 +396,14 @@ public sealed class BrokerRentalHomesController : ControllerBase
         if (request.DailyPrice <= 0 || request.DailyPrice > 10000) return "Daily price must be between 1 and 10000.";
         if (request.RoomCount <= 0 || request.RoomCount > 50) return "Room count must be between 1 and 50.";
         if (request.GuestCount <= 0 || request.GuestCount > 100) return "Guest count must be between 1 and 100.";
+        return null;
+    }
+
+    private static string? ValidateAvailabilityBlock(BrokerAvailabilityBlockRequest request)
+    {
+        if (request.StartDate == default || request.EndDate == default) return "Start and end dates are required.";
+        if (request.StartDate > request.EndDate) return "Start date must not be after end date.";
+        if (request.Note?.Length > 500) return "Note must be 500 characters or less.";
         return null;
     }
 }

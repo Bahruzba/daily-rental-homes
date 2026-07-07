@@ -76,6 +76,67 @@ public sealed class BookingsControllerTests
     }
 
     [Fact]
+    public async Task ManualAvailabilityBlockDateFails()
+    {
+        await using var context = CreateContext();
+        await SeedBaseData(context);
+        context.RentalHomeAvailabilityBlocks.Add(new RentalHomeAvailabilityBlock
+        {
+            RentalHomeId = 1,
+            StartDate = new DateOnly(2026, 7, 10),
+            EndDate = new DateOnly(2026, 7, 12),
+            Note = "Broker private note"
+        });
+        await context.SaveChangesAsync();
+        var controller = Controller(context);
+
+        var result = await controller.Create(Request(1, new DateOnly(2026, 7, 11)), default);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<object>>(badRequest.Value);
+        Assert.Contains("date conflict", response.Error, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("2026-07-11", response.Error);
+    }
+
+    [Fact]
+    public async Task ExistingConfirmedBookingDateFails()
+    {
+        await using var context = CreateContext();
+        await SeedBaseData(context);
+        var confirmed = new BookingStatus { Id = 44, Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 2 };
+        context.BookingStatuses.Add(confirmed);
+        await context.SaveChangesAsync();
+        await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 11), confirmed.Id);
+        var controller = Controller(context);
+
+        var result = await controller.Create(Request(1, new DateOnly(2026, 7, 11)), default);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        var response = Assert.IsType<ApiResponse<object>>(badRequest.Value);
+        Assert.Contains("date conflict", response.Error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FreeDateSucceedsWhenOtherDatesAreBlocked()
+    {
+        await using var context = CreateContext();
+        await SeedBaseData(context);
+        context.RentalHomeAvailabilityBlocks.Add(new RentalHomeAvailabilityBlock
+        {
+            RentalHomeId = 1,
+            StartDate = new DateOnly(2026, 7, 10),
+            EndDate = new DateOnly(2026, 7, 12)
+        });
+        await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 20));
+        var controller = Controller(context);
+
+        var result = await controller.Create(Request(1, new DateOnly(2026, 7, 15)), default);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(2, await context.Bookings.CountAsync());
+    }
+
+    [Fact]
     public async Task SameDateForDifferentRentalHomeSucceeds()
     {
         await using var context = CreateContext();

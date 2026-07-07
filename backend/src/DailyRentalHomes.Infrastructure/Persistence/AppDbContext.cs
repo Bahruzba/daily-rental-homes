@@ -16,6 +16,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<OtpCode> OtpCodes => Set<OtpCode>();
     public DbSet<RentalHome> RentalHomes => Set<RentalHome>();
+    public DbSet<RentalHomeAvailabilityBlock> RentalHomeAvailabilityBlocks => Set<RentalHomeAvailabilityBlock>();
     public DbSet<MediaFile> MediaFiles => Set<MediaFile>();
     public DbSet<RelatedContact> RelatedContacts => Set<RelatedContact>();
     public DbSet<Amenity> Amenities => Set<Amenity>();

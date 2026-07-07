@@ -19,4 +19,5 @@ public sealed class RentalHome : BaseEntity
     public ICollection<MediaFile> MediaFiles { get; set; } = new List<MediaFile>();
     public ICollection<RelatedContact> Contacts { get; set; } = new List<RelatedContact>();
     public ICollection<RentalHomeAmenity> Amenities { get; set; } = new List<RentalHomeAmenity>();
+    public ICollection<RentalHomeAvailabilityBlock> AvailabilityBlocks { get; set; } = new List<RentalHomeAvailabilityBlock>();
 }
