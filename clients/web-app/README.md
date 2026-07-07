@@ -63,8 +63,13 @@ Mock rejimdə yaratma, redaktə, publish/unpublish və media əməliyyatları lo
 - `POST /api/broker/rental-homes/{id}/media`
 - `PATCH /api/broker/rental-homes/{id}/media/{mediaId}/main`
 - `DELETE /api/broker/rental-homes/{id}/media/{mediaId}`
+- `GET /api/broker/rental-homes/{id}/availability-blocks`
+- `POST /api/broker/rental-homes/{id}/availability-blocks`
+- `DELETE /api/broker/rental-homes/{id}/availability-blocks/{blockId}`
 
 Şəkil upload-u JPG, PNG və WebP faylları üçün 5 MB limitlə işləyir. Live rejimdə yüklənmiş fayllar backend-in lokal `/uploads/rental-homes/...` URL-ləri ilə göstərilir. Production üçün private object storage, resize/compression və daha sərt content validation ayrıca mərhələdir.
+
+Broker edit səhifəsində sadə “Uyğun olmayan tarixlər” bölməsi var. Start/end date və broker qeydi ilə tarix aralığı bloklana bilər; qeyd public müştəri ekranında göstərilmir. Mock rejimdə bloklar lokal state-də saxlanır, live rejimdə backend endpoint-ləri çağırılır. Public booking form backend-dən gələn unavailable ranges əsasında uyğun olmayan tarixləri boz/disabled göstərir və backend overlap xətasını oxunaqlı mesajla göstərir.
 
 ## Beh axını
 

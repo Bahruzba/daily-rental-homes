@@ -125,6 +125,27 @@ public sealed class BookingsController : ControllerBase
         }
 
         var nonBlockingStatusCodes = new[] { BookingStatusCodes.Cancelled, BookingStatusCodes.Rejected };
+        var firstRequestedDate = dates[0];
+        var lastRequestedDate = dates[^1];
+        var manuallyBlockedDates = await _db.RentalHomeAvailabilityBlocks
+            .AsNoTracking()
+            .Where(block =>
+                !block.IsDeleted &&
+                block.RentalHomeId == request.RentalHomeId &&
+                block.EndDate >= firstRequestedDate &&
+                block.StartDate <= lastRequestedDate)
+            .Select(block => new { block.StartDate, block.EndDate })
+            .ToListAsync(cancellationToken);
+        var blockedDates = dates
+            .Where(date => manuallyBlockedDates.Any(block => date >= block.StartDate && date <= block.EndDate))
+            .ToList();
+
+        if (blockedDates.Count > 0)
+        {
+            return BadRequest(ApiResponse<object>.Fail(
+                $"Booking date conflict: {string.Join(", ", blockedDates.Select(date => date.ToString("yyyy-MM-dd")))}."));
+        }
+
         var conflictingDates = await _db.BookingDates
             .AsNoTracking()
             .Where(bookingDate =>

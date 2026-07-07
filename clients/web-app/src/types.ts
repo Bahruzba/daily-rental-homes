@@ -14,6 +14,7 @@ export type RentalHome = {
   rating: number
   reviews: number
   amenities: string[]
+  unavailableRanges?: Array<{ startDate: string; endDate: string }>
   contact: {
     name: string
     phone: string

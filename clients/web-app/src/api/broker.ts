@@ -41,9 +41,24 @@ export type BrokerRentalHomeDetail = BrokerRentalHome & {
   description: string
   roomCount: number
   media: BrokerRentalHomeMedia[]
+  availabilityBlocks: BrokerAvailabilityBlock[]
   upcomingBookingCount: number
   createdAt: string
   updatedAt?: string | null
+}
+
+export type BrokerAvailabilityBlock = {
+  id: number
+  startDate: string
+  endDate: string
+  note?: string | null
+  createdAt: string
+}
+
+export type BrokerAvailabilityBlockPayload = {
+  startDate: string
+  endDate: string
+  note?: string
 }
 
 export type BrokerRentalHomePayload = {
@@ -126,7 +141,7 @@ export class BrokerRequestError extends Error {
 let mockHomes: BrokerRentalHomeDetail[] = [
   { id: 1, title: 'Dağ mənzərəli hovuzlu bağ evi', city: 'Qəbələ', district: 'Vəndam', dailyPrice: 180, guestCount: 8, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/qebele-villa.webp`, bookingCount: 3 },
   { id: 2, title: 'Meşə içində sakit kottec', city: 'İsmayıllı', district: 'Lahıc yolu', dailyPrice: 125, guestCount: 5, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/ismayilli-cottage.webp`, bookingCount: 2 },
-].map((home) => ({ ...home, description: 'Demo broker evi üçün qısa təsvir.', address: 'Demo ünvan', roomCount: 3, media: home.mainImageUrl ? [{ id: home.id * 100, url: home.mainImageUrl, type: 'HomeImage', isMain: true, sortOrder: 0, contentType: 'image/webp' }] : [], upcomingBookingCount: home.bookingCount, createdAt: new Date().toISOString(), updatedAt: null }))
+].map((home) => ({ ...home, description: 'Demo broker evi üçün qısa təsvir.', address: 'Demo ünvan', roomCount: 3, media: home.mainImageUrl ? [{ id: home.id * 100, url: home.mainImageUrl, type: 'HomeImage', isMain: true, sortOrder: 0, contentType: 'image/webp' }] : [], availabilityBlocks: [], upcomingBookingCount: home.bookingCount, createdAt: new Date().toISOString(), updatedAt: null }))
 
 let mockBookings: BrokerBooking[] = [
   { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false },
@@ -210,6 +225,7 @@ export async function createBrokerRentalHome(payload: BrokerRentalHomePayload, t
       address: payload.address || null,
       isPublished: payload.isPublished ?? false,
       media: [],
+      availabilityBlocks: [],
       mainImageUrl: null,
       bookingCount: 0,
       upcomingBookingCount: 0,
@@ -279,6 +295,37 @@ export async function setBrokerRentalHomeMainMedia(id: number, mediaId: number, 
     return { ...media, isMain: true, sortOrder: 0 }
   }
   return request(`/api/broker/rental-homes/${id}/media/${mediaId}/main`, token, { method: 'PATCH' })
+}
+
+export async function getBrokerAvailabilityBlocks(id: number, token: string): Promise<BrokerAvailabilityBlock[]> {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    return home.availabilityBlocks
+  }
+  return request(`/api/broker/rental-homes/${id}/availability-blocks`, token)
+}
+
+export async function addBrokerAvailabilityBlock(id: number, payload: BrokerAvailabilityBlockPayload, token: string): Promise<BrokerAvailabilityBlock> {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    if (payload.startDate > payload.endDate) throw new BrokerRequestError('Başlanğıc tarixi bitiş tarixindən sonra ola bilməz.')
+    const block: BrokerAvailabilityBlock = { id: Date.now(), ...payload, note: payload.note || null, createdAt: new Date().toISOString() }
+    home.availabilityBlocks = [...home.availabilityBlocks, block].sort((left, right) => left.startDate.localeCompare(right.startDate))
+    return block
+  }
+  return request(`/api/broker/rental-homes/${id}/availability-blocks`, token, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function deleteBrokerAvailabilityBlock(id: number, blockId: number, token: string) {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    home.availabilityBlocks = home.availabilityBlocks.filter((item) => item.id !== blockId)
+    return { id: blockId }
+  }
+  return request<{ id: number }>(`/api/broker/rental-homes/${id}/availability-blocks/${blockId}`, token, { method: 'DELETE' })
 }
 
 export async function getBrokerBookings(token: string): Promise<BrokerBooking[]> {

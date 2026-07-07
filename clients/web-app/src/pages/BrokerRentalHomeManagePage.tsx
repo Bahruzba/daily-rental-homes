@@ -1,9 +1,11 @@
-import { ArrowLeft, ImagePlus, Save, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarX, ImagePlus, Save, Star, Trash2 } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   BrokerRequestError,
+  addBrokerAvailabilityBlock,
   createBrokerRentalHome,
+  deleteBrokerAvailabilityBlock,
   deleteBrokerRentalHomeMedia,
   getBrokerRentalHome,
   publishBrokerRentalHome,
@@ -40,6 +42,8 @@ export function BrokerRentalHomeManagePage() {
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [mediaBusyId, setMediaBusyId] = useState<number>()
+  const [blockBusyId, setBlockBusyId] = useState<number>()
+  const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', note: '' })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const title = useMemo(() => isNew ? 'Yeni ev əlavə et' : 'Evi idarə et', [isNew])
@@ -151,6 +155,40 @@ export function BrokerRentalHomeManagePage() {
     }
   }
 
+  async function addBlock(event: FormEvent) {
+    event.preventDefault()
+    if (!session || isNew) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      await addBrokerAvailabilityBlock(homeId, blockForm, session.accessToken)
+      setHome(await getBrokerRentalHome(homeId, session.accessToken))
+      setBlockForm({ startDate: '', endDate: '', note: '' })
+      setSuccess('Tarix bloku əlavə edildi.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Tarix bloku əlavə edilmədi.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deleteBlock(blockId: number) {
+    if (!session || isNew) return
+    setBlockBusyId(blockId)
+    setError('')
+    setSuccess('')
+    try {
+      await deleteBrokerAvailabilityBlock(homeId, blockId, session.accessToken)
+      setHome(await getBrokerRentalHome(homeId, session.accessToken))
+      setSuccess('Tarix bloku silindi.')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Tarix bloku silinmədi.')
+    } finally {
+      setBlockBusyId(undefined)
+    }
+  }
+
   return <AppLayout><section className="broker-detail-page"><div className="container">
     <Link className="back-link" to="/broker"><ArrowLeft size={16} /> Broker panelinə qayıt</Link>
     <div className="broker-detail-heading"><div><span className="eyebrow">EV İDARƏETMƏSİ</span><h1>{title}</h1><p>Öz elanınızı yaradın, redaktə edin və şəkilləri idarə edin.</p></div>{!isNew && <div><strong>{form.isPublished ? 'Yayımda' : 'Qaralama'}</strong><button className="button button-ghost" disabled={saving} onClick={() => void togglePublish(!form.isPublished)}>{form.isPublished ? 'Gizlət' : 'Yayımla'}</button></div>}</div>
@@ -183,6 +221,24 @@ export function BrokerRentalHomeManagePage() {
               <button type="button" className="icon-button" title="Əsas şəkil et" disabled={mediaBusyId === media.id || media.isMain} onClick={() => void mediaAction(() => setBrokerRentalHomeMainMedia(homeId, media.id, session!.accessToken), 'Əsas şəkil dəyişdirildi.', media.id)}><Star size={16} /></button>
               <button type="button" className="icon-button danger" title="Sil" disabled={mediaBusyId === media.id} onClick={() => void mediaAction(() => deleteBrokerRentalHomeMedia(homeId, media.id, session!.accessToken), 'Şəkil silindi.', media.id)}><Trash2 size={16} /></button>
             </article>) : <p>Hələ şəkil yoxdur. İlk yüklənən şəkil əsas şəkil olacaq.</p>}
+          </div>
+        </>}
+      </aside>
+      <aside className="broker-media-panel broker-availability-panel">
+        <h2>Uyğun olmayan tarixlər</h2>
+        {isNew ? <p>Əvvəlcə evi yaradın, sonra tarix bloklayın.</p> : <>
+          <form className="availability-form" onSubmit={addBlock}>
+            <label><span>Başlanğıc</span><input type="date" required value={blockForm.startDate} onChange={(event) => setBlockForm((current) => ({ ...current, startDate: event.target.value }))} /></label>
+            <label><span>Bitiş</span><input type="date" required value={blockForm.endDate} onChange={(event) => setBlockForm((current) => ({ ...current, endDate: event.target.value }))} /></label>
+            <label className="full"><span>Qeyd <em>yalnız broker üçündür</em></span><input maxLength={500} value={blockForm.note} onChange={(event) => setBlockForm((current) => ({ ...current, note: event.target.value }))} /></label>
+            <button className="button button-primary" disabled={saving}><CalendarX size={16} /> Tarixi blokla</button>
+          </form>
+          <div className="broker-media-list">
+            {home?.availabilityBlocks.length ? home.availabilityBlocks.map((block) => <article key={block.id}>
+              <CalendarX />
+              <div><strong>{block.startDate} — {block.endDate}</strong><span>{block.note || 'Qeyd yoxdur'}</span></div>
+              <button type="button" className="icon-button danger" title="Sil" disabled={blockBusyId === block.id} onClick={() => void deleteBlock(block.id)}><Trash2 size={16} /></button>
+            </article>) : <p>Bu ev üçün bloklanmış tarix yoxdur.</p>}
           </div>
         </>}
       </aside>

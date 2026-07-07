@@ -11,6 +11,7 @@ type RentalHomeApiModel = Pick<RentalHome, 'id' | 'title' | 'city' | 'dailyPrice
   mainImageUrl?: string | null
   mediaFiles?: Array<{ fileUrl: string; sortOrder: number }>
   contacts?: Array<{ fullName: string; value: string; contactType: number }>
+  unavailableRanges?: Array<{ startDate: string; endDate: string }>
 }
 
 type BookingCreatedApiModel = {

@@ -12,6 +12,7 @@ public sealed record BrokerRentalHomeDetailResponse(
     int GuestCount,
     bool IsPublished,
     IReadOnlyList<BrokerRentalHomeMediaResponse> Media,
+    IReadOnlyList<BrokerAvailabilityBlockResponse> AvailabilityBlocks,
     int BookingCount,
     int UpcomingBookingCount,
     DateTime CreatedAt,
@@ -38,6 +39,18 @@ public sealed record BrokerRentalHomeSaveRequest(
     bool? IsPublished);
 
 public sealed record BrokerRentalHomeSaveResponse(long Id);
+
+public sealed record BrokerAvailabilityBlockResponse(
+    long Id,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string? Note,
+    DateTime CreatedAt);
+
+public sealed record BrokerAvailabilityBlockRequest(
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string? Note);
 
 public sealed record BrokerRentalHomeMediaUploadResponse(
     long Id,

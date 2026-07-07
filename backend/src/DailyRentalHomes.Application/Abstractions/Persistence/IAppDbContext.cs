@@ -7,6 +7,7 @@ public interface IAppDbContext
 {
     DbSet<User> Users { get; }
     DbSet<RentalHome> RentalHomes { get; }
+    DbSet<RentalHomeAvailabilityBlock> RentalHomeAvailabilityBlocks { get; }
     DbSet<MediaFile> MediaFiles { get; }
     DbSet<RelatedContact> RelatedContacts { get; }
     DbSet<Booking> Bookings { get; }

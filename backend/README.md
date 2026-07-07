@@ -110,7 +110,7 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 - POST /api/bookings
 - POST /api/bookings/{id}/status
 
-`POST /api/bookings` accepts `rentalHomeId`, `name`, `phone`, `guests`, `dates[]`, and optional `note`. The backend loads the rental home's daily price, resolves the Pending status by its stable code, sorts the dates, and calculates the total amount. Duplicate dates in one request and dates blocked by non-cancelled bookings for the same home return a validation error.
+`POST /api/bookings` accepts `rentalHomeId`, `name`, `phone`, `guests`, `dates[]`, and optional `note`. The backend loads the rental home's daily price, resolves the Pending status by its stable code, sorts the dates, and calculates the total amount. Duplicate dates in one request, dates blocked by non-cancelled bookings for the same home, and manual broker availability blocks return a validation error. Manual date ranges are inclusive.
 
 ### Broker dashboard
 
@@ -135,6 +135,9 @@ Broker/Admin JWT endpoints:
 - POST /api/broker/rental-homes/{id}/media (`multipart/form-data`, field: `file`)
 - DELETE /api/broker/rental-homes/{id}/media/{mediaId}
 - PATCH /api/broker/rental-homes/{id}/media/{mediaId}/main
+- GET /api/broker/rental-homes/{id}/availability-blocks
+- POST /api/broker/rental-homes/{id}/availability-blocks
+- DELETE /api/broker/rental-homes/{id}/availability-blocks/{blockId}
 
 Broker users can only manage homes where `rental_homes.broker_user_id` matches their JWT user ID. Another broker receives 404 to avoid leaking ownership. Customer and unauthenticated users cannot access these endpoints.
 
@@ -149,7 +152,9 @@ Media type usage:
 - `DepositReceipt` — customer deposit receipt upload
 - `Other` — fallback/manual records
 
-MVP limits: no private object storage, image resizing/compression, malware scan, magic-byte validation, full admin CRUD, or owner onboarding yet.
+Availability blocks are stored in `rental_home_availability_blocks` with inclusive `start_date` and `end_date`. Broker notes are visible only through broker endpoints. Public rental-home detail returns unavailable ranges from manual broker blocks and active/non-cancelled bookings without exposing broker notes.
+
+MVP limits: no private object storage, image resizing/compression, malware scan, magic-byte validation, full admin CRUD, owner onboarding, recurring availability rules, or advanced pricing yet.
 
 ### Booking deposit flow
 

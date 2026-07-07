@@ -1,10 +1,27 @@
 import { CalendarDays, CheckCircle2, Minus, Plus, ShieldCheck } from 'lucide-react'
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BookingRequestError, createBooking } from '../api/client'
 import type { BookingResult, RentalHome } from '../types'
 
 const availableDates = Array.from({ length: 14 }, (_, index) => ({ value: `2026-07-${String(index + 8).padStart(2, '0')}`, label: index + 8 }))
+
+function nextDateString(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  const utcDate = new Date(Date.UTC(year, month - 1, day + 1))
+  const nextYear = utcDate.getUTCFullYear()
+  const nextMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
+  const nextDay = String(utcDate.getUTCDate()).padStart(2, '0')
+  return `${nextYear}-${nextMonth}-${nextDay}`
+}
+
+function expandDateRange(startDate: string, endDate: string) {
+  const values: string[] = []
+  for (let current = startDate; current <= endDate; current = nextDateString(current)) {
+    values.push(current)
+  }
+  return values
+}
 
 export function BookingForm({ home }: { home: RentalHome }) {
   const [dates, setDates] = useState<string[]>(['2026-07-12', '2026-07-13', '2026-07-14'])
@@ -13,8 +30,16 @@ export function BookingForm({ home }: { home: RentalHome }) {
   const [confirmation, setConfirmation] = useState<BookingResult>()
   const [error, setError] = useState('')
   const total = useMemo(() => home.dailyPrice * dates.length, [dates.length, home.dailyPrice])
+  const unavailableDates = useMemo(() => new Set((home.unavailableRanges ?? []).flatMap((range) => expandDateRange(range.startDate, range.endDate))), [home.unavailableRanges])
 
-  function toggleDate(value: string) { setDates((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value].sort()) }
+  useEffect(() => {
+    setDates((current) => current.filter((date) => !unavailableDates.has(date)))
+  }, [unavailableDates])
+
+  function toggleDate(value: string) {
+    if (unavailableDates.has(value)) return
+    setDates((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value].sort())
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -44,7 +69,7 @@ export function BookingForm({ home }: { home: RentalHome }) {
 
   return <form className="booking-form-layout" onSubmit={submit}>
     <div className="booking-form-main">
-      <section className="form-section"><div className="form-step">1</div><div className="form-section-content"><h2>Rezervasiya tarixləri</h2><p>Uyğun günləri ayrıca seçin.</p><div className="calendar-card"><div className="calendar-head"><button type="button">‹</button><strong>İyul 2026</strong><button type="button">›</button></div><div className="week-row">{['B.e', 'Ç.a', 'Ç', 'C.a', 'C', 'Ş', 'B'].map((day) => <span key={day}>{day}</span>)}</div><div className="date-grid">{availableDates.map((date) => <button type="button" className={dates.includes(date.value) ? 'selected' : ''} onClick={() => toggleDate(date.value)} key={date.value}>{date.label}</button>)}</div></div><div className="selected-dates" aria-label="Seçilmiş tarixlər">{dates.map((date) => <button type="button" key={date} onClick={() => toggleDate(date)}>{new Date(`${date}T00:00:00`).toLocaleDateString('az-AZ', { day: 'numeric', month: 'long' })} ×</button>)}</div>{!dates.length && <p className="field-error">Ən azı bir tarix seçin.</p>}</div></section>
+      <section className="form-section"><div className="form-step">1</div><div className="form-section-content"><h2>Rezervasiya tarixləri</h2><p>Uyğun günləri ayrıca seçin. Boz tarixlər artıq tutulub və ya broker tərəfindən bağlanıb.</p><div className="calendar-card"><div className="calendar-head"><button type="button">‹</button><strong>İyul 2026</strong><button type="button">›</button></div><div className="week-row">{['B.e', 'Ç.a', 'Ç', 'C.a', 'C', 'Ş', 'B'].map((day) => <span key={day}>{day}</span>)}</div><div className="date-grid">{availableDates.map((date) => <button type="button" disabled={unavailableDates.has(date.value)} className={`${dates.includes(date.value) ? 'selected' : ''} ${unavailableDates.has(date.value) ? 'unavailable' : ''}`} onClick={() => toggleDate(date.value)} key={date.value}>{date.label}</button>)}</div></div><div className="selected-dates" aria-label="Seçilmiş tarixlər">{dates.map((date) => <button type="button" key={date} onClick={() => toggleDate(date)}>{new Date(`${date}T00:00:00`).toLocaleDateString('az-AZ', { day: 'numeric', month: 'long' })} ×</button>)}</div>{!dates.length && <p className="field-error">Ən azı bir tarix seçin.</p>}</div></section>
       <section className="form-section"><div className="form-step">2</div><div className="form-section-content"><h2>Qonaqlar</h2><p>Bu evdə maksimum {home.guestCount} qonaq qala bilər.</p><div className="guest-stepper"><span>Qonaq sayı</span><div><button type="button" onClick={() => setGuests(Math.max(1, guests - 1))} aria-label="Qonaq sayını azalt"><Minus size={16} /></button><strong>{guests}</strong><button type="button" onClick={() => setGuests(Math.min(home.guestCount, guests + 1))} aria-label="Qonaq sayını artır"><Plus size={16} /></button></div></div></div></section>
       <section className="form-section"><div className="form-step">3</div><div className="form-section-content"><h2>Əlaqə məlumatları</h2><p>Broker təsdiq üçün bu məlumatlarla əlaqə saxlayacaq.</p><div className="input-grid"><label><span>Ad və soyad</span><input name="name" required placeholder="Məsələn, Aysel Məmmədova" /></label><label><span>Telefon nömrəsi</span><input name="phone" type="tel" required placeholder="+994 50 000 00 00" /></label><label className="full"><span>Broker üçün qeyd <em>istəyə bağlı</em></span><textarea name="note" placeholder="Gəliş vaxtı və ya əlavə sualınız" /></label></div></div></section>
     </div>
