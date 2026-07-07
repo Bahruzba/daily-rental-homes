@@ -6,6 +6,23 @@ import type { BookingResult, RentalHome } from '../types'
 
 const availableDates = Array.from({ length: 14 }, (_, index) => ({ value: `2026-07-${String(index + 8).padStart(2, '0')}`, label: index + 8 }))
 
+function nextDateString(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  const utcDate = new Date(Date.UTC(year, month - 1, day + 1))
+  const nextYear = utcDate.getUTCFullYear()
+  const nextMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0')
+  const nextDay = String(utcDate.getUTCDate()).padStart(2, '0')
+  return `${nextYear}-${nextMonth}-${nextDay}`
+}
+
+function expandDateRange(startDate: string, endDate: string) {
+  const values: string[] = []
+  for (let current = startDate; current <= endDate; current = nextDateString(current)) {
+    values.push(current)
+  }
+  return values
+}
+
 export function BookingForm({ home }: { home: RentalHome }) {
   const [dates, setDates] = useState<string[]>(['2026-07-12', '2026-07-13', '2026-07-14'])
   const [guests, setGuests] = useState(Math.min(4, home.guestCount))
@@ -13,16 +30,7 @@ export function BookingForm({ home }: { home: RentalHome }) {
   const [confirmation, setConfirmation] = useState<BookingResult>()
   const [error, setError] = useState('')
   const total = useMemo(() => home.dailyPrice * dates.length, [dates.length, home.dailyPrice])
-  const unavailableDates = useMemo(() => new Set((home.unavailableRanges ?? []).flatMap((range) => {
-    const values: string[] = []
-    const cursor = new Date(`${range.startDate}T00:00:00`)
-    const end = new Date(`${range.endDate}T00:00:00`)
-    while (cursor <= end) {
-      values.push(cursor.toISOString().slice(0, 10))
-      cursor.setDate(cursor.getDate() + 1)
-    }
-    return values
-  })), [home.unavailableRanges])
+  const unavailableDates = useMemo(() => new Set((home.unavailableRanges ?? []).flatMap((range) => expandDateRange(range.startDate, range.endDate))), [home.unavailableRanges])
 
   useEffect(() => {
     setDates((current) => current.filter((date) => !unavailableDates.has(date)))
