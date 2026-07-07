@@ -27,7 +27,20 @@ public sealed class RentalHomesController : ControllerBase
             .AsNoTracking()
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.Id)
-            .Select(x => new RentalHomeResponse(x.Id, x.Title, x.City, x.District, x.DailyPrice, x.RoomCount, x.GuestCount, x.IsPublished))
+            .Select(x => new RentalHomeResponse(
+                x.Id,
+                x.Title,
+                x.City,
+                x.District,
+                x.DailyPrice,
+                x.RoomCount,
+                x.GuestCount,
+                x.IsPublished,
+                x.MediaFiles
+                    .Where(media => media.FileType == DailyRentalHomes.Domain.Enums.MediaFileType.HomeImage)
+                    .OrderBy(media => media.SortOrder)
+                    .Select(media => media.FileUrl)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return Ok(ApiResponse<object>.Ok(items));
@@ -51,6 +64,7 @@ public sealed class RentalHomesController : ControllerBase
                 x.GuestCount,
                 x.IsPublished,
                 x.MediaFiles
+                    .Where(media => media.FileType == DailyRentalHomes.Domain.Enums.MediaFileType.HomeImage)
                     .OrderBy(media => media.SortOrder)
                     .Select(media => new RentalHomeMediaResponse(media.FileUrl, media.SortOrder))
                     .ToList(),

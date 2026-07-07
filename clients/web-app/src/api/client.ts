@@ -8,6 +8,7 @@ type RentalHomeApiModel = Pick<RentalHome, 'id' | 'title' | 'city' | 'dailyPrice
   description?: string
   district?: string | null
   address?: string | null
+  mainImageUrl?: string | null
   mediaFiles?: Array<{ fileUrl: string; sortOrder: number }>
   contacts?: Array<{ fullName: string; value: string; contactType: number }>
 }
@@ -46,19 +47,24 @@ function withMockPresentation(home: RentalHomeApiModel): RentalHome {
   const apiImages = home.mediaFiles
     ?.filter((media) => media.fileUrl)
     .sort((left, right) => left.sortOrder - right.sortOrder)
-    .map((media) => media.fileUrl)
+    .map((media) => resolveAssetUrl(media.fileUrl))
+  const listImage = home.mainImageUrl ? [resolveAssetUrl(home.mainImageUrl)] : []
 
   return {
     ...fallback,
     ...home,
     description: home.description || fallback.description,
-    images: apiImages?.length ? apiImages : fallback.images,
+    images: apiImages?.length ? apiImages : listImage.length ? listImage : fallback.images,
     contact: {
       name: phone?.fullName || whatsapp?.fullName || fallback.contact.name,
       phone: phone?.value || fallback.contact.phone,
       whatsapp: getWhatsAppUrl(whatsapp?.value, fallback.contact.whatsapp),
     },
   }
+}
+
+function resolveAssetUrl(url: string) {
+  return /^https?:|^blob:/i.test(url) ? url : `${baseUrl}${url}`
 }
 
 export async function getRentalHomes(): Promise<RentalHome[]> {

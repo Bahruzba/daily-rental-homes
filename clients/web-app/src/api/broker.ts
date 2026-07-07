@@ -27,6 +27,37 @@ export type BrokerRentalHome = {
   bookingCount: number
 }
 
+export type BrokerRentalHomeMedia = {
+  id: number
+  url: string
+  type: string
+  isMain: boolean
+  sortOrder: number
+  contentType?: string | null
+  sizeBytes?: number | null
+}
+
+export type BrokerRentalHomeDetail = BrokerRentalHome & {
+  description: string
+  roomCount: number
+  media: BrokerRentalHomeMedia[]
+  upcomingBookingCount: number
+  createdAt: string
+  updatedAt?: string | null
+}
+
+export type BrokerRentalHomePayload = {
+  title: string
+  description: string
+  city: string
+  district?: string
+  address?: string
+  dailyPrice: number
+  roomCount: number
+  guestCount: number
+  isPublished?: boolean
+}
+
 export type BrokerBooking = {
   bookingId: number
   rentalHomeId: number
@@ -92,10 +123,10 @@ export class BrokerRequestError extends Error {
   }
 }
 
-const mockHomes: BrokerRentalHome[] = [
+let mockHomes: BrokerRentalHomeDetail[] = [
   { id: 1, title: 'Dağ mənzərəli hovuzlu bağ evi', city: 'Qəbələ', district: 'Vəndam', dailyPrice: 180, guestCount: 8, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/qebele-villa.webp`, bookingCount: 3 },
   { id: 2, title: 'Meşə içində sakit kottec', city: 'İsmayıllı', district: 'Lahıc yolu', dailyPrice: 125, guestCount: 5, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/ismayilli-cottage.webp`, bookingCount: 2 },
-]
+].map((home) => ({ ...home, description: 'Demo broker evi üçün qısa təsvir.', address: 'Demo ünvan', roomCount: 3, media: home.mainImageUrl ? [{ id: home.id * 100, url: home.mainImageUrl, type: 'HomeImage', isMain: true, sortOrder: 0, contentType: 'image/webp' }] : [], upcomingBookingCount: home.bookingCount, createdAt: new Date().toISOString(), updatedAt: null }))
 
 let mockBookings: BrokerBooking[] = [
   { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false },
@@ -120,9 +151,15 @@ export function getMockBrokerBookings() { return mockBookings }
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
+    const isFormData = init?.body instanceof FormData
+    const headers = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      Authorization: `Bearer ${token}`,
+      ...init?.headers,
+    }
     response = await fetch(`${baseUrl}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init?.headers },
+      headers,
     })
   } catch (technicalCause) {
     throw new BrokerRequestError('Serverlə əlaqə qurmaq mümkün olmadı.', technicalCause)
@@ -152,6 +189,96 @@ export async function getBrokerSummary(token: string): Promise<BrokerSummary> {
 export async function getBrokerRentalHomes(token: string): Promise<BrokerRentalHome[]> {
   if (!useLiveApi) return mockHomes
   return request('/api/broker/rental-homes', token)
+}
+
+export async function getBrokerRentalHome(id: number, token: string): Promise<BrokerRentalHomeDetail> {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    return home
+  }
+  return request(`/api/broker/rental-homes/${id}`, token)
+}
+
+export async function createBrokerRentalHome(payload: BrokerRentalHomePayload, token: string) {
+  if (!useLiveApi) {
+    const id = Math.max(0, ...mockHomes.map((item) => item.id)) + 1
+    const home: BrokerRentalHomeDetail = {
+      id,
+      ...payload,
+      district: payload.district || null,
+      address: payload.address || null,
+      isPublished: payload.isPublished ?? false,
+      media: [],
+      mainImageUrl: null,
+      bookingCount: 0,
+      upcomingBookingCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+    }
+    mockHomes = [home, ...mockHomes]
+    return { id }
+  }
+  return request<{ id: number }>('/api/broker/rental-homes', token, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateBrokerRentalHome(id: number, payload: BrokerRentalHomePayload, token: string) {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    Object.assign(home, payload, { district: payload.district || null, address: payload.address || null, updatedAt: new Date().toISOString() })
+    return { id }
+  }
+  return request<{ id: number }>(`/api/broker/rental-homes/${id}`, token, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function publishBrokerRentalHome(id: number, token: string, isPublished: boolean) {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    home.isPublished = isPublished
+    return { id }
+  }
+  return request<{ id: number }>(`/api/broker/rental-homes/${id}/${isPublished ? 'publish' : 'unpublish'}`, token, { method: 'PATCH' })
+}
+
+export async function uploadBrokerRentalHomeMedia(id: number, file: File, token: string): Promise<BrokerRentalHomeMedia> {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    const media: BrokerRentalHomeMedia = { id: Date.now(), url: URL.createObjectURL(file), type: 'HomeImage', isMain: home.media.length === 0, sortOrder: home.media.length, contentType: file.type, sizeBytes: file.size }
+    home.media = [...home.media, media]
+    home.mainImageUrl = home.media.find((item) => item.isMain)?.url ?? media.url
+    return media
+  }
+
+  const form = new FormData()
+  form.append('file', file)
+  return request(`/api/broker/rental-homes/${id}/media`, token, { method: 'POST', body: form })
+}
+
+export async function deleteBrokerRentalHomeMedia(id: number, mediaId: number, token: string) {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    if (!home) throw new BrokerRequestError('Ev tapılmadı.')
+    home.media = home.media.filter((item) => item.id !== mediaId)
+    if (!home.media.some((item) => item.isMain) && home.media[0]) home.media[0].isMain = true
+    home.mainImageUrl = home.media.find((item) => item.isMain)?.url ?? null
+    return { id: mediaId }
+  }
+  return request<{ id: number }>(`/api/broker/rental-homes/${id}/media/${mediaId}`, token, { method: 'DELETE' })
+}
+
+export async function setBrokerRentalHomeMainMedia(id: number, mediaId: number, token: string): Promise<BrokerRentalHomeMedia> {
+  if (!useLiveApi) {
+    const home = mockHomes.find((item) => item.id === id)
+    const media = home?.media.find((item) => item.id === mediaId)
+    if (!home || !media) throw new BrokerRequestError('Şəkil tapılmadı.')
+    home.media = home.media.map((item) => ({ ...item, isMain: item.id === mediaId, sortOrder: item.id === mediaId ? 0 : Math.max(1, item.sortOrder) }))
+    home.mainImageUrl = media.url
+    return { ...media, isMain: true, sortOrder: 0 }
+  }
+  return request(`/api/broker/rental-homes/${id}/media/${mediaId}/main`, token, { method: 'PATCH' })
 }
 
 export async function getBrokerBookings(token: string): Promise<BrokerBooking[]> {

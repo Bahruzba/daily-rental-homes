@@ -49,6 +49,23 @@ Booking səhifəsi giriş tələb etmir və həm mock, həm live rejimdə işlə
 
 Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür. `waiting_deposit` yalnız beh sorğusu ilə, `confirmed` isə qəbz təsdiqi ilə yaranır; generic status əməliyyatı yalnız ləğv üçün istifadə olunur.
 
+## Broker ev idarəetməsi
+
+Broker panelində `Ev əlavə et` düyməsi `/broker/rental-homes/new` səhifəsini açır. Mövcud ev kartına klik `/broker/rental-homes/:id/edit` idarəetmə səhifəsinə aparır.
+
+Mock rejimdə yaratma, redaktə, publish/unpublish və media əməliyyatları lokal yaddaşda simulyasiya olunur. Live rejimdə frontend bu endpoint-ləri çağırır:
+
+- `POST /api/broker/rental-homes`
+- `GET /api/broker/rental-homes/{id}`
+- `PUT /api/broker/rental-homes/{id}`
+- `PATCH /api/broker/rental-homes/{id}/publish`
+- `PATCH /api/broker/rental-homes/{id}/unpublish`
+- `POST /api/broker/rental-homes/{id}/media`
+- `PATCH /api/broker/rental-homes/{id}/media/{mediaId}/main`
+- `DELETE /api/broker/rental-homes/{id}/media/{mediaId}`
+
+Şəkil upload-u JPG, PNG və WebP faylları üçün 5 MB limitlə işləyir. Live rejimdə yüklənmiş fayllar backend-in lokal `/uploads/rental-homes/...` URL-ləri ilə göstərilir. Production üçün private object storage, resize/compression və daha sərt content validation ayrıca mərhələdir.
+
 ## Beh axını
 
 Broker `/broker/bookings/:id` səhifəsində məbləğ, gələcək son tarix, maskalanmış kart, bank və qeyd ilə beh istəyə bilər. Customer `/account` bölməsində öz telefonuna/hesabına bağlı rezervasiyaları, `/account/bookings/:id` səhifəsində beh təlimatını görür və JPG/PNG/WebP qəbz şəkli yükləyir. Broker yüklənmiş qəbzi təsdiq və ya rədd edə bilər. Mock rejimdə eyni ekranlar və state keçidləri backend olmadan işləyir.
