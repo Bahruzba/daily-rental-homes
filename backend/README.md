@@ -122,6 +122,35 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 
 Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. The generic broker status endpoint records status history and now permits cancellation only; `waiting_deposit` and `confirmed` are controlled by the deposit request/approval endpoints. Cancellation keeps the existing rule that cancelled bookings do not block dates. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
+### Broker rental home management
+
+Broker/Admin JWT endpoints:
+
+- POST /api/broker/rental-homes
+- GET /api/broker/rental-homes/{id}
+- PUT /api/broker/rental-homes/{id}
+- PATCH /api/broker/rental-homes/{id}/publish
+- PATCH /api/broker/rental-homes/{id}/unpublish
+- DELETE /api/broker/rental-homes/{id}
+- POST /api/broker/rental-homes/{id}/media (`multipart/form-data`, field: `file`)
+- DELETE /api/broker/rental-homes/{id}/media/{mediaId}
+- PATCH /api/broker/rental-homes/{id}/media/{mediaId}/main
+
+Broker users can only manage homes where `rental_homes.broker_user_id` matches their JWT user ID. Another broker receives 404 to avoid leaking ownership. Customer and unauthenticated users cannot access these endpoints.
+
+Create/update accepts title, description, city, district, address, daily price, room count, guest count, and publication state. New homes default to draft/unpublished unless `isPublished` is explicitly sent. Public rental-home endpoints still return existing homes; published media can be used by the frontend as the main/card image.
+
+Home images are stored in the existing `media_files` table with `file_type = HomeImage`. The first image for a home is assigned `sort_order = 0` and treated as the main image. Setting another image as main moves it to `sort_order = 0`. Upload accepts JPG, PNG, and WebP images up to 5 MB and stores development files under `src/DailyRentalHomes.Api/wwwroot/uploads/rental-homes/{homeId}`. Public URLs are returned as `/uploads/rental-homes/...`; local filesystem paths are not exposed.
+
+Media type usage:
+
+- `HomeImage` — rental home gallery/card image
+- `CardImage` — reserved for future payment/card images
+- `DepositReceipt` — customer deposit receipt upload
+- `Other` — fallback/manual records
+
+MVP limits: no private object storage, image resizing/compression, malware scan, magic-byte validation, full admin CRUD, or owner onboarding yet.
+
 ### Booking deposit flow
 
 Broker endpoints (Broker or Admin JWT, ownership-scoped for Broker):

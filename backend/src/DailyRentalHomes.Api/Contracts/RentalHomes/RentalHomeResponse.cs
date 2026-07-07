@@ -8,7 +8,8 @@ public sealed record RentalHomeResponse(
     decimal DailyPrice,
     int RoomCount,
     int GuestCount,
-    bool IsPublished);
+    bool IsPublished,
+    string? MainImageUrl);
 
 public sealed record RentalHomeDetailResponse(
     long Id,

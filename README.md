@@ -77,6 +77,8 @@ An empty base URL uses the Vite `/api` proxy to `http://127.0.0.1:5099`.
 
 Frontend login route is `/login`. Mock mode uses OTP `123456` and allows selecting Admin, Broker, or Customer. Live mode obtains the role from the backend and redirects to `/admin`, `/broker`, or `/account`. The MVP stores the JWT session in `localStorage`; this must be revisited before production use.
 
+Broker users can manage their own rental homes from `/broker`: create/edit draft homes, publish/unpublish, upload JPG/PNG/WebP images up to 5 MB, set the main image, and delete images. In live mode this uses `/api/broker/rental-homes...` endpoints with the Broker JWT. Uploaded development images are served from `/uploads/rental-homes/...`.
+
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.

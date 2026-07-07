@@ -25,9 +25,22 @@ public sealed class RentalHomesController : ControllerBase
     {
         var items = await _db.RentalHomes
             .AsNoTracking()
-            .Where(x => !x.IsDeleted)
+            .Where(x => !x.IsDeleted && x.IsPublished)
             .OrderByDescending(x => x.Id)
-            .Select(x => new RentalHomeResponse(x.Id, x.Title, x.City, x.District, x.DailyPrice, x.RoomCount, x.GuestCount, x.IsPublished))
+            .Select(x => new RentalHomeResponse(
+                x.Id,
+                x.Title,
+                x.City,
+                x.District,
+                x.DailyPrice,
+                x.RoomCount,
+                x.GuestCount,
+                x.IsPublished,
+                x.MediaFiles
+                    .Where(media => !media.IsDeleted && media.FileType == DailyRentalHomes.Domain.Enums.MediaFileType.HomeImage)
+                    .OrderBy(media => media.SortOrder)
+                    .Select(media => media.FileUrl)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return Ok(ApiResponse<object>.Ok(items));
@@ -38,7 +51,7 @@ public sealed class RentalHomesController : ControllerBase
     {
         var item = await _db.RentalHomes
             .AsNoTracking()
-            .Where(x => x.Id == id && !x.IsDeleted)
+            .Where(x => x.Id == id && !x.IsDeleted && x.IsPublished)
             .Select(x => new RentalHomeDetailResponse(
                 x.Id,
                 x.Title,
@@ -51,6 +64,7 @@ public sealed class RentalHomesController : ControllerBase
                 x.GuestCount,
                 x.IsPublished,
                 x.MediaFiles
+                    .Where(media => !media.IsDeleted && media.FileType == DailyRentalHomes.Domain.Enums.MediaFileType.HomeImage)
                     .OrderBy(media => media.SortOrder)
                     .Select(media => new RentalHomeMediaResponse(media.FileUrl, media.SortOrder))
                     .ToList(),
