@@ -197,6 +197,105 @@ public sealed class BrokerRentalHomesControllerTests
         Assert.Equal("/uploads/rental-homes/101/main.webp", detail.MediaFiles[0].FileUrl);
     }
 
+    [Fact]
+    public async Task PublicListExcludesUnpublishedHomes()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var draft = Home(103, 10, "Draft Home");
+        draft.IsPublished = false;
+        context.RentalHomes.Add(draft);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(default));
+
+        Assert.DoesNotContain(list, home => home.Id == 103);
+        Assert.All(list, home => Assert.True(home.IsPublished));
+    }
+
+    [Fact]
+    public async Task PublicDetailReturnsNotFoundForUnpublishedHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var draft = Home(103, 10, "Draft Home");
+        draft.IsPublished = false;
+        context.RentalHomes.Add(draft);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var result = await controller.GetById(103, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task PublicListAndDetailExcludeDeletedMedia()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var deletedMedia = await context.MediaFiles.SingleAsync(item => item.Id == 200);
+        deletedMedia.IsDeleted = true;
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(default));
+        var item = Assert.Single(list, home => home.Id == 101);
+        Assert.Equal("/uploads/rental-homes/101/side.webp", item.MainImageUrl);
+
+        var detail = GetObjectData<RentalHomeDetailResponse>(await controller.GetById(101, default));
+        var media = Assert.Single(detail.MediaFiles);
+        Assert.Equal("/uploads/rental-homes/101/side.webp", media.FileUrl);
+    }
+
+    [Fact]
+    public async Task BrokerDetailExcludesDeletedMedia()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var deletedMedia = await context.MediaFiles.SingleAsync(item => item.Id == 200);
+        deletedMedia.IsDeleted = true;
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var detail = GetData<BrokerRentalHomeDetailResponse>(await controller.GetById(101, default));
+
+        var media = Assert.Single(detail.Media);
+        Assert.Equal(201, media.Id);
+        Assert.Equal("/uploads/rental-homes/101/side.webp", media.Url);
+    }
+
+    [Fact]
+    public async Task DeletingMainMediaPromotesNextActiveImage()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.DeleteMedia(101, 200, default);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.True((await context.MediaFiles.IgnoreQueryFilters().SingleAsync(item => item.Id == 200)).IsDeleted);
+        Assert.Equal(0, (await context.MediaFiles.SingleAsync(item => item.Id == 201)).SortOrder);
+    }
+
+    [Fact]
+    public async Task BrokerCannotManageSoftDeletedRentalHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var home = await context.RentalHomes.SingleAsync(item => item.Id == 101);
+        home.IsDeleted = true;
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        Assert.IsType<NotFoundObjectResult>(await controller.GetById(101, default));
+        Assert.IsType<NotFoundObjectResult>(await controller.Update(101, ValidRequest("Should not update"), default));
+        Assert.IsType<NotFoundObjectResult>(await controller.Publish(101, default));
+        Assert.IsType<NotFoundObjectResult>(await controller.UploadMedia(101, ImageFile("home.webp", "image/webp"), default));
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()

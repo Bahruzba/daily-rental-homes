@@ -182,8 +182,22 @@ public sealed class BrokerRentalHomesController : ControllerBase
         var media = await OwnMedia(id).FirstOrDefaultAsync(item => item.Id == mediaId, cancellationToken);
         if (media is null) return NotFound(ApiResponse<object>.Fail("Media file not found."));
 
+        var wasMain = media.SortOrder == 0;
         media.IsDeleted = true;
         media.UpdatedByUserId = User.GetUserId();
+        if (wasMain)
+        {
+            var activeSiblings = await OwnMedia(id)
+                .Where(item => item.Id != media.Id)
+                .OrderBy(item => item.SortOrder)
+                .ThenBy(item => item.Id)
+                .ToListAsync(cancellationToken);
+            for (var index = 0; index < activeSiblings.Count; index++)
+            {
+                activeSiblings[index].SortOrder = index;
+            }
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<object>.Ok(new { media.Id }));
     }
@@ -221,7 +235,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
 
     private IQueryable<RentalHome> OwnHomes()
     {
-        var query = _db.RentalHomes.AsQueryable();
+        var query = _db.RentalHomes.Where(item => !item.IsDeleted);
         if (User.IsAdmin()) return query;
         var userId = User.GetUserId();
         return query.Where(item => item.BrokerUserId == userId);
@@ -231,7 +245,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
         OwnHomes()
             .Where(home => home.Id == homeId)
             .SelectMany(home => home.MediaFiles)
-            .Where(media => media.FileType == MediaFileType.HomeImage);
+            .Where(media => !media.IsDeleted && media.FileType == MediaFileType.HomeImage);
 
     private async Task<BrokerRentalHomeDetailResponse> ToDetail(RentalHome home, CancellationToken cancellationToken)
     {
@@ -253,7 +267,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
             home.GuestCount,
             home.IsPublished,
             home.MediaFiles
-                .Where(item => item.FileType == MediaFileType.HomeImage)
+                .Where(item => !item.IsDeleted && item.FileType == MediaFileType.HomeImage)
                 .OrderBy(item => item.SortOrder)
                 .Select(ToMediaResponse)
                 .ToList(),
