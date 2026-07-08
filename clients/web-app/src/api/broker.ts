@@ -396,10 +396,28 @@ export async function changeBrokerBookingStatus(id: number, statusCode: string, 
     const booking = mockBookings.find((item) => item.bookingId === id)
     if (!booking) throw new BrokerRequestError('Rezervasiya tapılmadı.')
     booking.statusCode = statusCode
-    booking.statusName = statusCode === 'waiting_deposit' ? 'WaitingDeposit' : statusCode === 'confirmed' ? 'Confirmed' : 'Cancelled'
+    booking.statusName = statusCode === 'waiting_deposit' ? 'WaitingDeposit' : statusCode === 'confirmed' ? 'Confirmed' : statusCode === 'rejected' ? 'Rejected' : 'Cancelled'
     booking.isDepositPending = statusCode === 'waiting_deposit'
     mockBookings = [...mockBookings]
     return { bookingId: id, statusCode, statusName: booking.statusName }
   }
   return request<{ bookingId: number; statusCode: string; statusName: string }>(`/api/broker/bookings/${id}/status`, token, { method: 'PATCH', body: JSON.stringify({ statusCode }) })
+}
+
+async function runBrokerBookingAction(id: number, action: 'accept' | 'reject' | 'cancel', token: string, note?: string) {
+  const statusCode = action === 'accept' ? 'confirmed' : action === 'reject' ? 'rejected' : 'cancelled'
+  if (!useLiveApi) return changeBrokerBookingStatus(id, statusCode, token)
+  return request<{ bookingId: number; statusCode: string; statusName: string }>(`/api/broker/bookings/${id}/${action}`, token, { method: 'PATCH', body: JSON.stringify({ note }) })
+}
+
+export function acceptBrokerBooking(id: number, token: string, note?: string) {
+  return runBrokerBookingAction(id, 'accept', token, note)
+}
+
+export function rejectBrokerBooking(id: number, token: string, note?: string) {
+  return runBrokerBookingAction(id, 'reject', token, note)
+}
+
+export function cancelBrokerBooking(id: number, token: string, note?: string) {
+  return runBrokerBookingAction(id, 'cancel', token, note)
 }

@@ -8,6 +8,7 @@ using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.EntityFrameworkCore;
 
 namespace DailyRentalHomes.Api.Controllers;
@@ -22,6 +23,19 @@ public sealed class BrokerController : ControllerBase
         {
             [BookingStatusCodes.Pending] = [BookingStatusCodes.Cancelled],
             [BookingStatusCodes.WaitingDeposit] = [BookingStatusCodes.Cancelled]
+        };
+
+    private static readonly IReadOnlyDictionary<string, string[]> BrokerActionTransitions =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            [BookingStatusCodes.Pending] =
+            [
+                BookingStatusCodes.Confirmed,
+                BookingStatusCodes.Rejected,
+                BookingStatusCodes.Cancelled
+            ],
+            [BookingStatusCodes.WaitingDeposit] = [BookingStatusCodes.Cancelled],
+            [BookingStatusCodes.Confirmed] = [BookingStatusCodes.Cancelled]
         };
 
     private readonly AppDbContext _db;
@@ -152,7 +166,61 @@ public sealed class BrokerController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("Status code is required."));
         }
 
+        var targetCode = request.StatusCode.Trim().ToLowerInvariant();
+        return await ChangeBookingStatusCore(id, targetCode, request.Note, AllowedTransitions, cancellationToken);
+    }
+
+    [HttpPatch("bookings/{id:long}/accept")]
+    public async Task<IActionResult> AcceptBooking(
+        long id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BrokerBookingActionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ChangeBookingStatusCore(
+            id,
+            BookingStatusCodes.Confirmed,
+            request?.Note,
+            BrokerActionTransitions,
+            cancellationToken);
+    }
+
+    [HttpPatch("bookings/{id:long}/reject")]
+    public async Task<IActionResult> RejectBooking(
+        long id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BrokerBookingActionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ChangeBookingStatusCore(
+            id,
+            BookingStatusCodes.Rejected,
+            request?.Note,
+            BrokerActionTransitions,
+            cancellationToken);
+    }
+
+    [HttpPatch("bookings/{id:long}/cancel")]
+    public async Task<IActionResult> CancelBooking(
+        long id,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BrokerBookingActionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ChangeBookingStatusCore(
+            id,
+            BookingStatusCodes.Cancelled,
+            request?.Note,
+            BrokerActionTransitions,
+            cancellationToken);
+    }
+
+    private async Task<IActionResult> ChangeBookingStatusCore(
+        long id,
+        string targetCode,
+        string? note,
+        IReadOnlyDictionary<string, string[]> allowedTransitions,
+        CancellationToken cancellationToken)
+    {
         var booking = await ScopeBookings(_db.Bookings)
+            .Include(item => item.RentalHome)
             .Include(item => item.Status)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
 
@@ -161,9 +229,8 @@ public sealed class BrokerController : ControllerBase
             return NotFound(ApiResponse<object>.Fail("Booking not found."));
         }
 
-        var targetCode = request.StatusCode.Trim().ToLowerInvariant();
         var targetStatus = await _db.BookingStatuses.FirstOrDefaultAsync(
-            status => status.Code == targetCode && status.IsActive,
+            status => status.Code == targetCode && status.IsActive && !status.IsDeleted,
             cancellationToken);
 
         if (targetStatus is null)
@@ -172,7 +239,7 @@ public sealed class BrokerController : ControllerBase
         }
 
         var currentCode = booking.Status?.Code ?? string.Empty;
-        if (!AllowedTransitions.TryGetValue(currentCode, out var targets) ||
+        if (!allowedTransitions.TryGetValue(currentCode, out var targets) ||
             !targets.Contains(targetCode, StringComparer.OrdinalIgnoreCase))
         {
             return BadRequest(ApiResponse<object>.Fail($"Status transition from '{currentCode}' to '{targetCode}' is not allowed."));
@@ -187,7 +254,7 @@ public sealed class BrokerController : ControllerBase
             OldStatusId = oldStatusId,
             NewStatusId = targetStatus.Id,
             ChangedByUserId = User.GetUserId(),
-            Note = TextRules.CleanOptional(request.Note)
+            Note = TextRules.CleanOptional(note)
         });
 
         await _notifications.QueueBookingStatusChangedAsync(booking, targetStatus.Code, cancellationToken);

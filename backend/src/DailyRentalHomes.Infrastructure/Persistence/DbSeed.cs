@@ -8,15 +8,13 @@ public static class DbSeed
 {
     public static async Task RunAsync(AppDbContext db, CancellationToken cancellationToken = default)
     {
-        if (!await db.BookingStatuses.AnyAsync(cancellationToken))
-        {
-            db.BookingStatuses.Add(new BookingStatus { Name = "Pending", Code = BookingStatusCodes.Pending, SortOrder = 1 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "WaitingDeposit", Code = BookingStatusCodes.WaitingDeposit, SortOrder = 2 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Paid", Code = BookingStatusCodes.Paid, SortOrder = 3 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 4 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Cancelled", Code = BookingStatusCodes.Cancelled, SortOrder = 5 });
-            db.BookingStatuses.Add(new BookingStatus { Name = "Completed", Code = BookingStatusCodes.Completed, SortOrder = 6 });
-        }
+        await EnsureBookingStatus(db, "Pending", BookingStatusCodes.Pending, 1, cancellationToken);
+        await EnsureBookingStatus(db, "WaitingDeposit", BookingStatusCodes.WaitingDeposit, 2, cancellationToken);
+        await EnsureBookingStatus(db, "Paid", BookingStatusCodes.Paid, 3, cancellationToken);
+        await EnsureBookingStatus(db, "Confirmed", BookingStatusCodes.Confirmed, 4, cancellationToken);
+        await EnsureBookingStatus(db, "Cancelled", BookingStatusCodes.Cancelled, 5, cancellationToken);
+        await EnsureBookingStatus(db, "Rejected", BookingStatusCodes.Rejected, 6, cancellationToken);
+        await EnsureBookingStatus(db, "Completed", BookingStatusCodes.Completed, 7, cancellationToken);
 
         if (!await db.Amenities.AnyAsync(cancellationToken))
         {
@@ -28,5 +26,20 @@ public static class DbSeed
         }
 
         await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task EnsureBookingStatus(
+        AppDbContext db,
+        string name,
+        string code,
+        int sortOrder,
+        CancellationToken cancellationToken)
+    {
+        if (await db.BookingStatuses.AnyAsync(status => status.Code == code, cancellationToken))
+        {
+            return;
+        }
+
+        db.BookingStatuses.Add(new BookingStatus { Name = name, Code = code, SortOrder = sortOrder });
     }
 }
