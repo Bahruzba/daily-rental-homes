@@ -74,6 +74,15 @@ Customer-visible status davranışı:
 
 Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunur. Live rejimdə frontend `/api/account/bookings`, `/api/account/bookings/{id}` və `/api/account/bookings/{id}/deposit/receipt` endpoint-lərini çağırır.
 
+Customer `/account/bookings/:id` səhifəsində aktiv rezervasiyalar üçün sadə ləğv sorğusu UI göstərilir. Göründüyü statuslar:
+
+- `pending`
+- `waiting_deposit`
+- `confirmed`
+- `paid`
+
+`completed`, `rejected` və `cancelled` statuslarında ləğv sorğusu göstərilmir. Müştəri istəyə bağlı `Səbəb` yaza bilər; limit 1000 simvoldur. Mock rejimdə sorğu lokal state/localStorage ilə simulyasiya olunur və düymə göndərildikdən sonra bağlanır. Live rejimdə customer cancel request endpoint-i hələ yoxdur; frontend fake endpoint çağırmır və “Bu funksiya hələ canlı rejimdə aktiv deyil.” mesajı göstərir.
+
 Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür.
 
 Broker booking detail səhifəsində pending rezervasiyanı təsdiqləmək, rədd etmək və ya ləğv etmək olur. Confirmed və waiting-deposit rezervasiyaları ləğv edilə bilər. Live rejimdə bu düymələr `/api/broker/bookings/{id}/accept`, `/reject`, `/cancel` endpoint-lərini çağırır; mock rejimdə eyni status keçidləri lokal simulyasiya olunur. Rədd edilmiş və ləğv edilmiş rezervasiyalar availability-ni bloklamır; pending davranışı hələ backend qaydasına uyğun olaraq bloklayır.

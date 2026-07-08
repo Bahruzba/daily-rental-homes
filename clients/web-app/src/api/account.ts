@@ -3,6 +3,8 @@ import type { ApiResponse } from '../types'
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const useLiveApi = import.meta.env.VITE_USE_LIVE_API === 'true'
+export const isAccountLiveApiEnabled = useLiveApi
+const mockCancelRequestStorageKey = 'daily-homes-mock-cancel-requests'
 
 export type AccountBooking = {
   bookingId: number
@@ -23,7 +25,10 @@ export type AccountBookingDetail = AccountBooking & {
   dailyPrice: number
   guests: number
   note?: string | null
+  cancelRequestSent?: boolean
 }
+
+type MockCancelRequest = { reason?: string; requestedAt: string }
 
 export class AccountRequestError extends Error {
   constructor(message: string, readonly technicalCause?: unknown) {
@@ -31,6 +36,14 @@ export class AccountRequestError extends Error {
     this.name = 'AccountRequestError'
   }
 }
+
+function readMockCancelRequests(): Record<number, MockCancelRequest | undefined> {
+  try { return JSON.parse(window.localStorage.getItem(mockCancelRequestStorageKey) ?? '{}') }
+  catch { return {} }
+}
+
+const mockCancelRequests: Record<number, MockCancelRequest | undefined> = readMockCancelRequests()
+function persistMockCancelRequests() { window.localStorage.setItem(mockCancelRequestStorageKey, JSON.stringify(mockCancelRequests)) }
 
 async function request<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   let response: Response
@@ -82,6 +95,7 @@ function mockBooking(id: number): AccountBookingDetail | undefined {
     note: booking.note,
     deposit: deposit ?? null,
     createdAt: booking.createdAt,
+    cancelRequestSent: Boolean(mockCancelRequests[id]),
   }
 }
 
@@ -122,4 +136,19 @@ export async function uploadDepositReceipt(id: number, file: File, token: string
   const body = new FormData()
   body.append('file', file)
   return request(`/api/account/bookings/${id}/deposit/receipt`, token, { method: 'POST', body })
+}
+
+export async function requestBookingCancellation(id: number, reason: string, _token: string) {
+  if (useLiveApi) {
+    throw new AccountRequestError('Bu funksiya hələ canlı rejimdə aktiv deyil.')
+  }
+
+  const booking = mockBooking(id)
+  if (!booking) throw new AccountRequestError('Rezervasiya tapılmadı.')
+  if (!['pending', 'waiting_deposit', 'confirmed', 'paid'].includes(booking.statusCode)) {
+    throw new AccountRequestError('Bu rezervasiya statusu üçün ləğv sorğusu göndərmək mümkün deyil.')
+  }
+  mockCancelRequests[id] = { reason: reason.trim() || undefined, requestedAt: new Date().toISOString() }
+  persistMockCancelRequests()
+  return { bookingId: id, requestedAt: mockCancelRequests[id]!.requestedAt }
 }

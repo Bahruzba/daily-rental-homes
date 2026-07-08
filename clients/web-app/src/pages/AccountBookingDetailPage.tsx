@@ -1,7 +1,7 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Home, UploadCloud } from 'lucide-react'
-import { type ChangeEvent, useEffect, useState } from 'react'
+import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Home, Send, UploadCloud } from 'lucide-react'
+import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getAccountBooking, uploadDepositReceipt, type AccountBookingDetail } from '../api/account'
+import { getAccountBooking, isAccountLiveApiEnabled, requestBookingCancellation, uploadDepositReceipt, type AccountBookingDetail } from '../api/account'
 import { resolveApiAssetUrl } from '../api/broker'
 import { useAuth } from '../auth/AuthContext'
 import { AppLayout } from '../components/AppLayout'
@@ -36,6 +36,8 @@ const depositLabels: Record<string, string> = {
   cancelled: 'Ləğv edilib',
 }
 
+const cancellableStatuses = ['pending', 'waiting_deposit', 'confirmed', 'paid']
+
 function depositMessage(booking: AccountBookingDetail) {
   if (booking.statusCode === 'rejected' || booking.statusCode === 'cancelled') {
     return 'Rezervasiya aktiv olmadığı üçün beh üzrə əlavə addım yoxdur.'
@@ -55,6 +57,9 @@ export function AccountBookingDetailPage() {
   const [booking, setBooking] = useState<AccountBookingDetail>()
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [cancelRequesting, setCancelRequesting] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelRequestSent, setCancelRequestSent] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -63,12 +68,47 @@ export function AccountBookingDetailPage() {
     setLoading(true)
     setError('')
     try {
-      setBooking(await getAccountBooking(bookingId, session.accessToken))
+      const nextBooking = await getAccountBooking(bookingId, session.accessToken)
+      setBooking(nextBooking)
+      setCancelRequestSent(Boolean(nextBooking.cancelRequestSent))
     } catch (cause) {
       console.error('Account booking load failed', cause)
       setError(cause instanceof Error ? cause.message : 'Rezervasiya yüklənmədi.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const submitCancelRequest = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!session || !booking) return
+    setError('')
+    setSuccess('')
+
+    if (!cancellableStatuses.includes(booking.statusCode)) {
+      setError('Bu rezervasiya statusu üçün ləğv sorğusu göndərmək mümkün deyil.')
+      return
+    }
+
+    if (isAccountLiveApiEnabled) {
+      setError('Bu funksiya hələ canlı rejimdə aktiv deyil.')
+      return
+    }
+
+    if (!window.confirm('Bu rezervasiya üçün ləğv sorğusu göndərmək istədiyinizə əminsiniz?')) return
+
+    setCancelRequesting(true)
+    try {
+      await requestBookingCancellation(booking.bookingId, cancelReason, session.accessToken)
+      setCancelRequestSent(true)
+      setCancelReason('')
+      setSuccess('Ləğv sorğunuz göndərildi. Broker sizinlə əlaqə saxlayacaq.')
+      await load()
+    } catch (cause) {
+      console.error('Cancel request failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Ləğv sorğusu göndərilmədi.')
+    } finally {
+      setCancelRequesting(false)
     }
   }
 
@@ -153,6 +193,28 @@ export function AccountBookingDetailPage() {
                     <div><span>Cəmi</span><strong>{money.format(booking.totalAmount)}</strong></div>
                   </div>
                   {booking.note && <p className="broker-note">Sizin qeydiniz: {booking.note}</p>}
+
+                  {cancellableStatuses.includes(booking.statusCode) && (
+                    <div className="cancel-request-panel">
+                      <h2>Rezervasiyanı ləğv etmək istəyirsiniz?</h2>
+                      <p>Bu sorğu rezervasiyanı avtomatik ləğv etmir. Broker müraciəti görüb sizinlə əlaqə saxlayacaq.</p>
+                      <form onSubmit={submitCancelRequest}>
+                        <label>
+                          <span>Səbəb</span>
+                          <textarea
+                            value={cancelReason}
+                            maxLength={1000}
+                            onChange={(event) => setCancelReason(event.target.value)}
+                            placeholder="İstəyə bağlı olaraq ləğv səbəbini yazın"
+                            disabled={cancelRequesting || cancelRequestSent}
+                          />
+                        </label>
+                        <button className="button button-ghost" disabled={cancelRequesting || cancelRequestSent}>
+                          <Send size={16} /> {cancelRequestSent ? 'Ləğv sorğusu göndərilib' : 'Ləğv sorğusu göndər'}
+                        </button>
+                      </form>
+                    </div>
+                  )}
                 </article>
 
                 <article className="customer-deposit-card">
