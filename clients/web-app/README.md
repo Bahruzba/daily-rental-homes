@@ -47,6 +47,20 @@ npm run dev
 
 Booking səhifəsi giriş tələb etmir və həm mock, həm live rejimdə işləməyə davam edir.
 
+Customer `/account` səhifəsi müştərinin öz rezervasiyalarını kart formatında göstərir: ev adı, şəhər/rayon, tarix sayı, toplam məbləğ, booking statusu, beh/qəbz statusu və növbəti addım. `/account/bookings/:id` səhifəsi ev xülasəsi, seçilmiş tarixlər, qonaq sayı, qiymət, status izahı və beh məlumatlarını daha detallı göstərir.
+
+Customer-visible status davranışı:
+
+- Pending: broker təsdiqi gözlənilir.
+- Confirmed: broker rezervasiyanı təsdiqləyib.
+- Rejected/cancelled: rezervasiya aktiv deyil, əlavə əməliyyat yoxdur.
+- Deposit requested: qəbz yükləmək lazımdır.
+- Receipt uploaded: broker qəbzi yoxlayır.
+- Deposit approved: beh qəbul edilib.
+- Deposit rejected: `allowReupload` true olduqda yeni qəbz yükləmək mümkündür.
+
+Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunur. Live rejimdə frontend `/api/account/bookings`, `/api/account/bookings/{id}` və `/api/account/bookings/{id}/deposit/receipt` endpoint-lərini çağırır.
+
 Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür.
 
 Broker booking detail səhifəsində pending rezervasiyanı təsdiqləmək, rədd etmək və ya ləğv etmək olur. Confirmed və waiting-deposit rezervasiyaları ləğv edilə bilər. Live rejimdə bu düymələr `/api/broker/bookings/{id}/accept`, `/reject`, `/cancel` endpoint-lərini çağırır; mock rejimdə eyni status keçidləri lokal simulyasiya olunur. Rədd edilmiş və ləğv edilmiş rezervasiyalar availability-ni bloklamır; pending davranışı hələ backend qaydasına uyğun olaraq bloklayır.

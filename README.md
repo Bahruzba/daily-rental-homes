@@ -83,6 +83,8 @@ Broker users can also block unavailable date ranges for their own homes. Public 
 
 Booking lifecycle MVP: new customer bookings start as `pending`. A broker can accept (`confirmed`), reject (`rejected`), or cancel (`cancelled`) their own bookings from the broker booking detail screen. Pending and confirmed bookings block the same dates from being booked again; rejected and cancelled bookings do not block availability. Deposit requests remain a separate broker action and are not created automatically when a booking is accepted.
 
+Customer account MVP: customers can open `/account` to see their own bookings, status, selected dates, total amount, rental home summary, and beh/deposit state. Booking detail shows the next required action, deposit instructions, uploaded receipt link, broker review note, and re-upload option when a rejected receipt allows it.
+
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.

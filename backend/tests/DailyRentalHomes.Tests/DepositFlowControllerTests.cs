@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using System.Text.Json;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
@@ -113,6 +114,26 @@ public sealed class DepositFlowControllerTests
         Assert.NotNull(response.Deposit);
         Assert.Equal(DepositStatusCodes.Requested, response.Deposit.StatusCode);
         Assert.Equal("Kapital Bank", response.Deposit.BankName);
+        Assert.Equal("/uploads/rental-homes/home-one.webp", response.MainImageUrl);
+        Assert.Equal(BookingStatusCodes.WaitingDeposit, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CustomerCanListOnlyOwnBookings()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var response = GetData<IReadOnlyList<AccountBookingListItemResponse>>(await controller.GetBookings(default));
+
+        var booking = Assert.Single(response);
+        Assert.Equal(1001, booking.BookingId);
+        Assert.Equal(BookingStatusCodes.WaitingDeposit, booking.StatusCode);
+        Assert.NotNull(booking.Deposit);
+        Assert.Equal("/uploads/rental-homes/home-one.webp", booking.MainImageUrl);
     }
 
     [Fact]
@@ -140,10 +161,93 @@ public sealed class DepositFlowControllerTests
         var response = GetData<DepositResponse>(await controller.UploadDepositReceipt(1001, ReceiptFile(), default));
 
         Assert.Equal(DepositStatusCodes.ReceiptUploaded, response.StatusCode);
-        var media = await context.MediaFiles.SingleAsync();
+        var media = await context.MediaFiles.SingleAsync(item => item.FileType == MediaFileType.DepositReceipt);
         Assert.Equal(MediaFileType.DepositReceipt, media.FileType);
         Assert.True(File.Exists(Path.Combine(environment.WebRootPath, media.FileUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))));
         Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.TypeCode == NotificationTypeCodes.DepositReceiptUploaded && item.RecipientUserId == 10);
+    }
+
+    [Fact]
+    public async Task CustomerCannotUploadReceiptForAnotherCustomersBooking()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1002);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var result = await controller.UploadDepositReceipt(1002, ReceiptFile(), default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task ReceiptUploadAllowedOnlyForValidDepositState()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddUploadedDeposit(context, 1001);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var result = await controller.UploadDepositReceipt(1001, ReceiptFile(), default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task RejectedDepositCanBeReuploadedOnlyWhenAllowed()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddUploadedDeposit(context, 1001);
+        var broker = BrokerController(context, 10);
+        await broker.Reject(1001, new ReviewBookingDepositInput { Note = "Unreadable", AllowReupload = true }, default);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var response = GetData<DepositResponse>(await controller.UploadDepositReceipt(1001, ReceiptFile(), default));
+
+        Assert.Equal(DepositStatusCodes.ReceiptUploaded, response.StatusCode);
+        Assert.Null(response.ReviewNote);
+    }
+
+    [Fact]
+    public async Task RejectedDepositCannotBeReuploadedWhenDisallowed()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddUploadedDeposit(context, 1001);
+        var broker = BrokerController(context, 10);
+        await broker.Reject(1001, new ReviewBookingDepositInput { Note = "Final rejection", AllowReupload = false }, default);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var result = await controller.UploadDepositReceipt(1001, ReceiptFile(), default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task BrokerPrivateAvailabilityNotesAreNotExposedToCustomer()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(new RentalHomeAvailabilityBlock
+        {
+            RentalHomeId = 101,
+            StartDate = new DateOnly(2026, 8, 20),
+            EndDate = new DateOnly(2026, 8, 21),
+            Note = "Private broker-only maintenance note"
+        });
+        await context.SaveChangesAsync();
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var response = GetData<AccountBookingDetailResponse>(await controller.GetBookingById(1001, default));
+        var json = JsonSerializer.Serialize(response);
+
+        Assert.DoesNotContain("Private broker-only maintenance note", json);
     }
 
     [Fact]
@@ -233,6 +337,16 @@ public sealed class DepositFlowControllerTests
             User(30, "+994501000030", UserRole.Customer, "Customer One"),
             User(31, "+994501000031", UserRole.Customer, "Customer Two"));
         context.RentalHomes.AddRange(Home(101, 10, "Home One"), Home(102, 20, "Home Two"));
+        context.MediaFiles.Add(new MediaFile
+        {
+            RentalHomeId = 101,
+            FileType = MediaFileType.HomeImage,
+            FileName = "home-one.webp",
+            FileUrl = "/uploads/rental-homes/home-one.webp",
+            ContentType = "image/webp",
+            SizeBytes = 100,
+            SortOrder = 0
+        });
         context.Bookings.AddRange(
             Booking(1001, 101, 30, "+994501000030", 1, new DateOnly(2026, 8, 10)),
             Booking(1002, 101, 31, "+994501000031", 1, new DateOnly(2026, 8, 11)),
