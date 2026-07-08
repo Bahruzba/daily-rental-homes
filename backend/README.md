@@ -185,7 +185,19 @@ Customer endpoints (Customer JWT, matched by booking customer/user or verified p
 - GET /api/account/bookings/{id}
 - POST /api/account/bookings/{id}/deposit/receipt (`multipart/form-data`, field: `file`)
 
-Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Customer account booking list/detail responses include booking status, selected dates, total amount, rental home city/district/main image, and deposit instructions when available. Customer-visible deposit data includes amount, deadline, status, card holder, masked PAN, bank name, broker instruction note, uploaded receipt, review note, and `allowReupload`; broker-only private availability notes are not exposed.
+
+Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Customers can upload only for bookings matched to their account/user or verified phone. Upload is allowed only when the deposit is waiting for a receipt, or when it was rejected with `allowReupload = true`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+
+Customer-visible status meanings:
+
+- `pending` — broker confirmation is still pending.
+- `confirmed` — broker accepted the booking.
+- `rejected` / `cancelled` — booking is no longer active and no customer action is required.
+- Deposit `requested` — customer should upload a receipt.
+- Deposit `receipt_uploaded` — broker is reviewing the receipt.
+- Deposit `approved` — deposit was accepted.
+- Deposit `rejected` — customer may re-upload only when `allowReupload` is true.
 
 Development receipts are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. This local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
 

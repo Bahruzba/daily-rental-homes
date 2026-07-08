@@ -42,6 +42,7 @@ public sealed class AccountController : ControllerBase
     {
         var bookings = await ScopeBookings(_db.Bookings.AsNoTracking())
             .Include(item => item.RentalHome)
+            .ThenInclude(home => home!.MediaFiles)
             .Include(item => item.Status)
             .Include(item => item.Dates)
             .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
@@ -55,6 +56,7 @@ public sealed class AccountController : ControllerBase
             item.RentalHome?.Title ?? string.Empty,
             item.RentalHome?.City ?? string.Empty,
             item.RentalHome?.District,
+            MainImageUrl(item),
             item.Status?.Code ?? string.Empty,
             item.Status?.Name ?? string.Empty,
             item.TotalAmount,
@@ -166,6 +168,7 @@ public sealed class AccountController : ControllerBase
     private IQueryable<Booking> BookingDetails() => ScopeBookings(_db.Bookings)
         .AsSplitQuery()
         .Include(item => item.RentalHome)
+        .ThenInclude(home => home!.MediaFiles)
         .Include(item => item.Status)
         .Include(item => item.Dates)
         .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
@@ -184,6 +187,7 @@ public sealed class AccountController : ControllerBase
         booking.RentalHome?.Title ?? string.Empty,
         booking.RentalHome?.City ?? string.Empty,
         booking.RentalHome?.District,
+        MainImageUrl(booking),
         booking.Status?.Code ?? string.Empty,
         booking.Status?.Name ?? string.Empty,
         booking.DailyPrice,
@@ -193,4 +197,10 @@ public sealed class AccountController : ControllerBase
         booking.CustomerNote,
         booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit),
         booking.CreatedAt);
+
+    private static string? MainImageUrl(Booking booking) => booking.RentalHome?.MediaFiles
+        .Where(file => file.FileType == MediaFileType.HomeImage && !file.IsDeleted)
+        .OrderBy(file => file.SortOrder)
+        .Select(file => file.FileUrl)
+        .FirstOrDefault();
 }
