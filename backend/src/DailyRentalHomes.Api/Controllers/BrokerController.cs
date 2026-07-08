@@ -143,6 +143,7 @@ public sealed class BrokerController : ControllerBase
             .Include(item => item.Dates)
             .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
             .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.ReceiptFiles)
+            .Include(item => item.CancellationRequests)
             .Include(item => item.StatusHistory).ThenInclude(history => history.OldStatus)
             .Include(item => item.StatusHistory).ThenInclude(history => history.NewStatus)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
@@ -308,6 +309,11 @@ public sealed class BrokerController : ControllerBase
                 item.CreatedAt))
             .ToList();
         var deposit = booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit);
+        var cancellationRequest = booking.CancellationRequests
+            .Where(item => item.StatusCode == "pending")
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => new BrokerCancellationRequestResponse(item.Id, item.StatusCode, item.Reason, item.CreatedAt))
+            .FirstOrDefault();
 
         return new BrokerBookingDetailResponse(
             booking.Id,
@@ -325,6 +331,7 @@ public sealed class BrokerController : ControllerBase
             booking.CustomerNote,
             booking.CreatedAt,
             history,
-            deposit);
+            deposit,
+            cancellationRequest);
     }
 }

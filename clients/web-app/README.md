@@ -87,6 +87,8 @@ Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker s
 
 Broker booking detail səhifəsində pending rezervasiyanı təsdiqləmək, rədd etmək və ya ləğv etmək olur. Confirmed və waiting-deposit rezervasiyaları ləğv edilə bilər. Live rejimdə bu düymələr `/api/broker/bookings/{id}/accept`, `/reject`, `/cancel` endpoint-lərini çağırır; mock rejimdə eyni status keçidləri lokal simulyasiya olunur. Rədd edilmiş və ləğv edilmiş rezervasiyalar availability-ni bloklamır; pending davranışı hələ backend qaydasına uyğun olaraq bloklayır.
 
+Broker `/broker/bookings/:id` səhifəsində backend detail response-da `cancellationRequest` varsa “Müştəri ləğv sorğusu göndərib” paneli göstərilir. Panel statusu, səbəbi və göndərilmə vaxtını göstərir. Bu PR-də panel read-only-dir: təsdiq/rədd workflow-u hələ yoxdur və düymələr disabled göstərilir. Mock rejimdə demo rezervasiyalardan biri pending ləğv sorğusu ilə göstərilir. Broker dashboard booking list response-da cancellation request məlumatı olmadığı üçün list badge bu mərhələdə əlavə edilməyib.
+
 Broker `/broker` dashboard rezervasiya siyahısında sadə filterlər var:
 
 - status
