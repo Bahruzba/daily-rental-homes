@@ -81,6 +81,8 @@ Broker users can manage their own rental homes from `/broker`: create/edit draft
 
 Broker users can also block unavailable date ranges for their own homes. Public detail exposes unavailable ranges without broker notes, and booking creation rejects blocked or already-booked dates.
 
+Booking lifecycle MVP: new customer bookings start as `pending`. A broker can accept (`confirmed`), reject (`rejected`), or cancel (`cancelled`) their own bookings from the broker booking detail screen. Pending and confirmed bookings block the same dates from being booked again; rejected and cancelled bookings do not block availability. Deposit requests remain a separate broker action and are not created automatically when a booking is accepted.
+
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.

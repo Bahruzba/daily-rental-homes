@@ -123,6 +123,93 @@ public sealed class BrokerControllerTests
     }
 
     [Fact]
+    public async Task BrokerCanAcceptOwnPendingBooking()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.AcceptBooking(1001, new BrokerBookingActionRequest { Note = "Accepted" }, default);
+        var response = GetData<BrokerBookingStatusChangeResponse>(result);
+
+        Assert.Equal(BookingStatusCodes.Confirmed, response.StatusCode);
+        Assert.Equal(3, (await context.Bookings.FindAsync(1001L))!.StatusId);
+        Assert.Equal("Accepted", (await context.BookingStatusHistory.SingleAsync()).Note);
+    }
+
+    [Fact]
+    public async Task BrokerCanRejectOwnPendingBooking()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.RejectBooking(1001, new BrokerBookingActionRequest { Note = "Unavailable" }, default);
+        var response = GetData<BrokerBookingStatusChangeResponse>(result);
+
+        Assert.Equal(BookingStatusCodes.Rejected, response.StatusCode);
+        Assert.Equal(5, (await context.Bookings.FindAsync(1001L))!.StatusId);
+        Assert.Equal("Unavailable", (await context.BookingStatusHistory.SingleAsync()).Note);
+    }
+
+    [Fact]
+    public async Task BrokerCanCancelConfirmedBooking()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var booking = await context.Bookings.FindAsync(1001L);
+        booking!.StatusId = 3;
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.CancelBooking(1001, new BrokerBookingActionRequest { Note = "Customer cancelled" }, default);
+        var response = GetData<BrokerBookingStatusChangeResponse>(result);
+
+        Assert.Equal(BookingStatusCodes.Cancelled, response.StatusCode);
+        Assert.Equal(4, (await context.Bookings.FindAsync(1001L))!.StatusId);
+    }
+
+    [Fact]
+    public async Task BrokerCannotActOnAnotherBrokersBooking()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.AcceptBooking(1002, null, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task InvalidStatusActionReturnsBadRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+        await controller.RejectBooking(1001, null, default);
+
+        var result = await controller.AcceptBooking(1001, null, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SoftDeletedHomeBookingCannotBeManaged()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var home = await context.RentalHomes.FindAsync(101L);
+        home!.IsDeleted = true;
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.AcceptBooking(1001, null, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
     public async Task CancelledThroughBrokerEndpointNoLongerBlocksDate()
     {
         await using var context = CreateContext();
@@ -160,7 +247,8 @@ public sealed class BrokerControllerTests
         var waiting = new BookingStatus { Id = 2, Name = "Waiting deposit", Code = BookingStatusCodes.WaitingDeposit, SortOrder = 2 };
         var confirmed = new BookingStatus { Id = 3, Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 3 };
         var cancelled = new BookingStatus { Id = 4, Name = "Cancelled", Code = BookingStatusCodes.Cancelled, SortOrder = 4 };
-        context.BookingStatuses.AddRange(pending, waiting, confirmed, cancelled);
+        var rejected = new BookingStatus { Id = 5, Name = "Rejected", Code = BookingStatusCodes.Rejected, SortOrder = 5 };
+        context.BookingStatuses.AddRange(pending, waiting, confirmed, cancelled, rejected);
         context.Users.AddRange(
             new User { Id = 10, FullName = "Broker One", PhoneNumber = "+994501000010", Role = UserRole.Broker },
             new User { Id = 20, FullName = "Broker Two", PhoneNumber = "+994501000020", Role = UserRole.Broker });

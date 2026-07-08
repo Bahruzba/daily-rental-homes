@@ -119,8 +119,23 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 - GET /api/broker/bookings
 - GET /api/broker/bookings/{id}
 - PATCH /api/broker/bookings/{id}/status
+- PATCH /api/broker/bookings/{id}/accept
+- PATCH /api/broker/bookings/{id}/reject
+- PATCH /api/broker/bookings/{id}/cancel
 
-Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. The generic broker status endpoint records status history and now permits cancellation only; `waiting_deposit` and `confirmed` are controlled by the deposit request/approval endpoints. Cancellation keeps the existing rule that cancelled bookings do not block dates. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
+Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. Soft-deleted homes/bookings are not manageable through broker status actions.
+
+Booking status lifecycle MVP:
+
+- New customer bookings start as `pending`.
+- Pending bookings can be accepted with `/accept`, rejected with `/reject`, or cancelled with `/cancel`.
+- Accepting moves the booking to `confirmed`.
+- Rejected and cancelled bookings cannot be accepted again.
+- Confirmed and waiting-deposit bookings can be cancelled.
+- Each broker status action writes `booking_status_history` and queues a `booking_status_changed` outbox record.
+- Pending, waiting-deposit, paid, and confirmed bookings block availability. Rejected and cancelled bookings do not block future booking dates.
+
+The generic broker status endpoint remains for backward compatibility and permits cancellation only. Deposit request/approval flow remains separate: accepting a booking does not automatically create a deposit, and requesting a deposit still moves an eligible booking to `waiting_deposit`. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
 ### Broker rental home management
 

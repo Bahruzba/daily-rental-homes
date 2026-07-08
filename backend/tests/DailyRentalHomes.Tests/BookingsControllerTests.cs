@@ -195,6 +195,22 @@ public sealed class BookingsControllerTests
         Assert.IsType<OkObjectResult>(result);
     }
 
+    [Fact]
+    public async Task RejectedBookingDoesNotBlockDate()
+    {
+        await using var context = CreateContext();
+        await SeedBaseData(context);
+        var rejected = new BookingStatus { Id = 45, Name = "Rejected", Code = BookingStatusCodes.Rejected, SortOrder = 2 };
+        context.BookingStatuses.Add(rejected);
+        await context.SaveChangesAsync();
+        await AddExistingBooking(context, rentalHomeId: 1, new DateOnly(2026, 7, 11), rejected.Id);
+        var controller = Controller(context);
+
+        var result = await controller.Create(Request(1, new DateOnly(2026, 7, 11)), default);
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
