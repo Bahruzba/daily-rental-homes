@@ -14,6 +14,24 @@ export type BrokerSummary = {
   totalExpectedAmount: number
 }
 
+export type BrokerReportSummary = {
+  bookingCount: number
+  revenueBookingCount: number
+  totalBookingAmount: number
+  totalExpenses: number
+  estimatedProfit: number
+  totalCleaningCost: number
+  totalOwnerPayout: number
+  totalOtherExpenses: number
+  from?: string | null
+  to?: string | null
+}
+
+export type BrokerReportSummaryFilters = {
+  from?: string
+  to?: string
+}
+
 export type BrokerRentalHome = {
   id: number
   title: string
@@ -234,6 +252,15 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
 export async function getBrokerSummary(token: string): Promise<BrokerSummary> {
   if (!useLiveApi) return { totalHomes: 2, activeHomes: 2, totalBookings: mockBookings.length, pendingBookings: mockBookings.filter((item) => item.statusCode === 'pending').length, pendingDepositBookings: mockBookings.filter((item) => item.statusCode === 'waiting_deposit').length, upcomingBookings: mockBookings.length, totalExpectedAmount: mockBookings.filter((item) => item.statusCode !== 'cancelled').reduce((sum, item) => sum + item.totalAmount, 0) }
   return request('/api/broker/summary', token)
+}
+
+export async function getBrokerReportSummary(token: string, filters: BrokerReportSummaryFilters = {}): Promise<BrokerReportSummary> {
+  if (!useLiveApi) return getMockBrokerReportSummary(filters)
+  const search = new URLSearchParams()
+  if (filters.from) search.set('from', filters.from)
+  if (filters.to) search.set('to', filters.to)
+  const query = search.toString()
+  return request(`/api/broker/reports/summary${query ? `?${query}` : ''}`, token)
 }
 
 export async function getBrokerRentalHomes(token: string): Promise<BrokerRentalHome[]> {
@@ -502,4 +529,40 @@ export async function deleteBrokerBookingExpense(bookingId: number, expenseId: n
     return { id: expenseId }
   }
   return request<{ id: number }>(`/api/broker/bookings/${bookingId}/expenses/${expenseId}`, token, { method: 'DELETE' })
+}
+
+function getMockBrokerReportSummary(filters: BrokerReportSummaryFilters): BrokerReportSummary {
+  const includedBookings = mockBookings.filter((booking) => {
+    if (!filters.from || !filters.to) return true
+    const dates = mockBookingDates(booking)
+    return dates.some((date) => date >= filters.from! && date <= filters.to!)
+  })
+  const revenueBookings = includedBookings.filter((booking) => !['cancelled', 'rejected'].includes(booking.statusCode))
+  const includedIds = new Set(includedBookings.map((booking) => booking.bookingId))
+  const expenses = Object.values(mockExpenses).flat().filter((expense) => includedIds.has(expense.bookingId))
+  const totalBookingAmount = revenueBookings.reduce((sum, booking) => sum + booking.totalAmount, 0)
+  const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0)
+  const totalCleaningCost = expenses.filter((expense) => expense.typeCode === 'cleaning').reduce((sum, expense) => sum + expense.amount, 0)
+  const totalOwnerPayout = expenses.filter((expense) => expense.typeCode === 'owner_payout').reduce((sum, expense) => sum + expense.amount, 0)
+  const totalOtherExpenses = expenses.filter((expense) => expense.typeCode !== 'cleaning' && expense.typeCode !== 'owner_payout').reduce((sum, expense) => sum + expense.amount, 0)
+
+  return {
+    bookingCount: includedBookings.length,
+    revenueBookingCount: revenueBookings.length,
+    totalBookingAmount,
+    totalExpenses,
+    estimatedProfit: totalBookingAmount - totalExpenses,
+    totalCleaningCost,
+    totalOwnerPayout,
+    totalOtherExpenses,
+    from: filters.from || null,
+    to: filters.to || null,
+  }
+}
+
+function mockBookingDates(booking: BrokerBooking): string[] {
+  if (!booking.firstDate) return []
+  if (!booking.lastDate || booking.firstDate === booking.lastDate) return [booking.firstDate]
+  if (booking.bookingId === 1001) return [booking.firstDate, '2026-07-13', booking.lastDate]
+  return [booking.firstDate, booking.lastDate]
 }
