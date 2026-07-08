@@ -114,17 +114,18 @@ Broker `/broker/bookings/:id` səhifəsində “Xərclər” bölməsindən reze
 
 - xərc siyahısı
 - xərc növü, başlıq, məbləğ, qeyd və yaradılma vaxtı
-- yeni xərc əlavə formu
-- xərc silmə düyməsi
+- xərc əlavə/redaktə formu
+- xərc redaktə və silmə düymələri
 - rezervasiya məbləği, cəmi xərclər və təxmini mənfəət
 
 Live rejimdə istifadə olunan endpoint-lər:
 
 - `GET /api/broker/bookings/{bookingId}/expenses`
 - `POST /api/broker/bookings/{bookingId}/expenses`
+- `PUT /api/broker/bookings/{bookingId}/expenses/{expenseId}`
 - `DELETE /api/broker/bookings/{bookingId}/expenses/{expenseId}`
 
-Mock rejimdə xərclər lokal demo state/localStorage ilə simulyasiya olunur. Detallı report dashboard, cədvəl və chart-lar ayrıca mərhələdə əlavə olunmalıdır.
+Mövcud xərc üçün “Düzəliş et” seçildikdə xərc məlumatları eyni forma yüklənir, submit düyməsi “Yadda saxla” olur və “Ləğv et” ilə edit rejimindən çıxmaq mümkündür. Mock rejimdə əlavə/redaktə/silmə lokal demo state/localStorage ilə simulyasiya olunur. Detallı report dashboard, cədvəl, chart-lar və inkişaf etmiş xərc kateqoriya lüğəti ayrıca mərhələdə əlavə olunmalıdır.
 
 ## Broker hesabat xülasəsi
 
