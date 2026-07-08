@@ -3,6 +3,7 @@ using DailyRentalHomes.Api.Contracts.Account;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -18,6 +19,14 @@ namespace DailyRentalHomes.Api.Controllers;
 public sealed class AccountController : ControllerBase
 {
     private const long MaxReceiptBytes = 5 * 1024 * 1024;
+    private const string CancellationRequestPending = "pending";
+    private static readonly HashSet<string> CancellableStatusCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        BookingStatusCodes.Pending,
+        BookingStatusCodes.WaitingDeposit,
+        BookingStatusCodes.Confirmed,
+        BookingStatusCodes.Paid
+    };
     private static readonly IReadOnlyDictionary<string, string> AllowedImageTypes =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -165,12 +174,62 @@ public sealed class AccountController : ControllerBase
         return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit)));
     }
 
+    [HttpPost("bookings/{id:long}/cancellation-requests")]
+    public async Task<IActionResult> RequestCancellation(
+        long id,
+        CreateBookingCancellationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var reason = request.Reason?.Trim();
+        if (reason?.Length > 1000)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Cancellation reason must be 1000 characters or less."));
+        }
+
+        var booking = await BookingDetails()
+            .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Booking not found."));
+        }
+
+        if (!CancellableStatusCodes.Contains(booking.Status?.Code ?? string.Empty))
+        {
+            return BadRequest(ApiResponse<object>.Fail("A cancellation request can be sent only for active bookings."));
+        }
+
+        var existingPending = booking.CancellationRequests
+            .Where(item => item.StatusCode == CancellationRequestPending)
+            .OrderByDescending(item => item.CreatedAt)
+            .FirstOrDefault();
+        if (existingPending is not null)
+        {
+            return BadRequest(ApiResponse<object>.Fail("A pending cancellation request already exists for this booking."));
+        }
+
+        var cancellationRequest = new BookingCancellationRequest
+        {
+            BookingId = booking.Id,
+            RequestedByUserId = User.GetUserId(),
+            Reason = string.IsNullOrWhiteSpace(reason) ? null : reason,
+            StatusCode = CancellationRequestPending,
+            CreatedByUserId = User.GetUserId()
+        };
+        booking.CancellationRequests.Add(cancellationRequest);
+
+        await _notifications.QueueBookingCancellationRequestedAsync(booking, cancellationRequest, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<BookingCancellationRequestResponse>.Ok(ToCancellationResponse(cancellationRequest)));
+    }
+
     private IQueryable<Booking> BookingDetails() => ScopeBookings(_db.Bookings)
         .AsSplitQuery()
         .Include(item => item.RentalHome)
         .ThenInclude(home => home!.MediaFiles)
         .Include(item => item.Status)
         .Include(item => item.Dates)
+        .Include(item => item.CancellationRequests)
         .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.PaymentCard)
         .Include(item => item.Deposit)!.ThenInclude(deposit => deposit!.ReceiptFiles);
 
@@ -196,7 +255,15 @@ public sealed class AccountController : ControllerBase
         booking.Dates.OrderBy(date => date.Date).Select(date => date.Date).ToList(),
         booking.CustomerNote,
         booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit),
-        booking.CreatedAt);
+        booking.CreatedAt,
+        booking.CancellationRequests.Any(item => item.StatusCode == CancellationRequestPending));
+
+    private static BookingCancellationRequestResponse ToCancellationResponse(BookingCancellationRequest request) => new(
+        request.Id,
+        request.BookingId,
+        request.StatusCode,
+        request.Reason,
+        request.CreatedAt);
 
     private static string? MainImageUrl(Booking booking) => booking.RentalHome?.MediaFiles
         .Where(file => file.FileType == MediaFileType.HomeImage && !file.IsDeleted)

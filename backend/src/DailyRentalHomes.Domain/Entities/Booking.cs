@@ -22,4 +22,5 @@ public sealed class Booking : BaseEntity
     public ICollection<BookingDate> Dates { get; set; } = new List<BookingDate>();
     public ICollection<BookingStatusHistory> StatusHistory { get; set; } = new List<BookingStatusHistory>();
     public ICollection<BookingExpense> Expenses { get; set; } = new List<BookingExpense>();
+    public ICollection<BookingCancellationRequest> CancellationRequests { get; set; } = new List<BookingCancellationRequest>();
 }

@@ -81,7 +81,7 @@ Customer `/account/bookings/:id` səhifəsində aktiv rezervasiyalar üçün sad
 - `confirmed`
 - `paid`
 
-`completed`, `rejected` və `cancelled` statuslarında ləğv sorğusu göstərilmir. Müştəri istəyə bağlı `Səbəb` yaza bilər; limit 1000 simvoldur. Mock rejimdə sorğu lokal state/localStorage ilə simulyasiya olunur və düymə göndərildikdən sonra bağlanır. Live rejimdə customer cancel request endpoint-i hələ yoxdur; frontend fake endpoint çağırmır və “Bu funksiya hələ canlı rejimdə aktiv deyil.” mesajı göstərir.
+`completed`, `rejected` və `cancelled` statuslarında ləğv sorğusu göstərilmir. Müştəri istəyə bağlı `Səbəb` yaza bilər; limit 1000 simvoldur. Mock rejimdə sorğu lokal state/localStorage ilə simulyasiya olunur və düymə göndərildikdən sonra bağlanır. Live rejimdə frontend `POST /api/account/bookings/{id}/cancellation-requests` endpoint-ini customer JWT ilə çağırır, uğurdan sonra booking detail-i yeniləyir və backend-dən gələn `cancelRequestSent` dəyərinə görə düyməni bağlı saxlayır.
 
 Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker summary, ev və booking endpoint-lərindən real məlumat yükləyir. Broker yalnız öz evlərini və həmin evlərin rezervasiyalarını görür.
 
