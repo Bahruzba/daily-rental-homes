@@ -3,6 +3,7 @@ using DailyRentalHomes.Api.Contracts.Broker;
 using DailyRentalHomes.Api.Contracts.RentalHomes;
 using DailyRentalHomes.Api.Controllers;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -329,6 +330,171 @@ public sealed class BrokerRentalHomesControllerTests
     }
 
     [Fact]
+    public async Task PublicListExcludesDeletedHomes()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var deleted = Home(103, 10, "Deleted Home");
+        deleted.IsDeleted = true;
+        context.RentalHomes.Add(deleted);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(default));
+
+        Assert.DoesNotContain(list, home => home.Id == 103);
+    }
+
+    [Fact]
+    public async Task PublicListCityAndDistrictFiltersWork()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var qubaHome = Home(103, 10, "Quba Home");
+        qubaHome.City = "Quba";
+        qubaHome.District = "Qəçrəş";
+        context.RentalHomes.Add(qubaHome);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var cityList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { City = " quba " }, default));
+        var districtList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { District = "qəçrəş" }, default));
+
+        Assert.Single(cityList, home => home.Id == 103);
+        Assert.Single(districtList, home => home.Id == 103);
+    }
+
+    [Fact]
+    public async Task PublicListGuestAndPriceFiltersWork()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var budgetHome = Home(103, 10, "Small Budget Home");
+        budgetHome.DailyPrice = 80m;
+        budgetHome.GuestCount = 2;
+        var premiumHome = Home(104, 10, "Large Premium Home");
+        premiumHome.DailyPrice = 240m;
+        premiumHome.GuestCount = 10;
+        context.RentalHomes.AddRange(budgetHome, premiumHome);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var guestList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { Guests = 8 }, default));
+        var priceList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { MinPrice = 70m, MaxPrice = 100m }, default));
+
+        Assert.DoesNotContain(guestList, home => home.GuestCount < 8);
+        Assert.Single(priceList, home => home.Id == 103);
+    }
+
+    [Fact]
+    public async Task PublicListKeywordSearchWorks()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var forestHome = Home(103, 10, "Forest Retreat");
+        forestHome.Description = "Quiet cedar forest stay";
+        forestHome.City = "Quba";
+        context.RentalHomes.Add(forestHome);
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var titleList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { Q = "forest" }, default));
+        var cityList = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { Q = "quba" }, default));
+
+        Assert.Single(titleList, home => home.Id == 103);
+        Assert.Single(cityList, home => home.Id == 103);
+    }
+
+    [Theory]
+    [InlineData(-1, null, null, null, null, null)]
+    [InlineData(null, -1, null, null, null, null)]
+    [InlineData(null, 200, 100, null, null, null)]
+    [InlineData(null, null, null, "2026-08-01", null, null)]
+    [InlineData(null, null, null, "2026-08-03", "2026-08-01", null)]
+    [InlineData(null, null, null, "not-a-date", "2026-08-01", null)]
+    public async Task PublicListInvalidFiltersReturnBadRequest(int? guests, int? minPrice, int? maxPrice, string? startDate, string? endDate, string? q)
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = new RentalHomesController(context);
+
+        var result = await controller.GetList(new PublicRentalHomeSearchRequest
+        {
+            Guests = guests,
+            MinPrice = minPrice,
+            MaxPrice = maxPrice,
+            StartDate = startDate,
+            EndDate = endDate,
+            Q = q
+        }, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task PublicListDateFilterExcludesManualAvailabilityBlockOverlap()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Private"));
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { StartDate = "2026-08-02", EndDate = "2026-08-04" }, default));
+
+        Assert.DoesNotContain(list, home => home.Id == 101);
+        Assert.Contains(list, home => home.Id == 102);
+    }
+
+    [Fact]
+    public async Task PublicListDateFilterExcludesActiveBookingOverlap()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingStatuses.Add(new BookingStatus { Id = 401, Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 1 });
+        context.Bookings.Add(Booking(501, 101, 401, new DateOnly(2026, 8, 5)));
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { StartDate = "2026-08-05", EndDate = "2026-08-06" }, default));
+
+        Assert.DoesNotContain(list, home => home.Id == 101);
+        Assert.Contains(list, home => home.Id == 102);
+    }
+
+    [Theory]
+    [InlineData(BookingStatusCodes.Cancelled)]
+    [InlineData(BookingStatusCodes.Rejected)]
+    public async Task PublicListDateFilterDoesNotExcludeRejectedOrCancelledBookingDates(string statusCode)
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingStatuses.Add(new BookingStatus { Id = 401, Name = statusCode, Code = statusCode, SortOrder = 1 });
+        context.Bookings.Add(Booking(501, 101, 401, new DateOnly(2026, 8, 5)));
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { StartDate = "2026-08-05", EndDate = "2026-08-06" }, default));
+
+        Assert.Contains(list, home => home.Id == 101);
+    }
+
+    [Fact]
+    public async Task PublicListDateFilterKeepsPendingBookingBlockingBehavior()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingStatuses.Add(new BookingStatus { Id = 401, Name = "Pending", Code = BookingStatusCodes.Pending, SortOrder = 1 });
+        context.Bookings.Add(Booking(501, 101, 401, new DateOnly(2026, 8, 5)));
+        await context.SaveChangesAsync();
+        var controller = new RentalHomesController(context);
+
+        var list = GetObjectData<IReadOnlyList<RentalHomeResponse>>(await controller.GetList(new PublicRentalHomeSearchRequest { StartDate = "2026-08-05", EndDate = "2026-08-06" }, default));
+
+        Assert.DoesNotContain(list, home => home.Id == 101);
+    }
+
+    [Fact]
     public async Task PublicDetailReturnsNotFoundForUnpublishedHome()
     {
         await using var context = CreateContext();
@@ -468,6 +634,19 @@ public sealed class BrokerRentalHomesControllerTests
         StartDate = startDate,
         EndDate = endDate,
         Note = note
+    };
+
+    private static Booking Booking(long id, long homeId, long statusId, DateOnly date) => new()
+    {
+        Id = id,
+        RentalHomeId = homeId,
+        CustomerFullName = "Existing Customer",
+        CustomerPhoneNumber = "+994501111111",
+        GuestCount = 2,
+        DailyPrice = 120m,
+        TotalAmount = 120m,
+        StatusId = statusId,
+        Dates = [new BookingDate { Date = date }]
     };
 
     private static BrokerRentalHomeSaveRequest ValidRequest(string title) => new(

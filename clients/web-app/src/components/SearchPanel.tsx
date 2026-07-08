@@ -1,38 +1,70 @@
 import { CalendarDays, MapPin, Search, SlidersHorizontal, UsersRound } from 'lucide-react'
-import { useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
+import type { RentalHomeFilters } from '../api/client'
 
 type SearchPanelProps = {
-  onSearch?: (city: string) => void
+  filters?: RentalHomeFilters
+  onSearch?: (filters: RentalHomeFilters) => void
+  onClear?: () => void
 }
 
-export function SearchPanel({ onSearch }: SearchPanelProps) {
-  const [city, setCity] = useState('')
+const cities = ['Qəbələ', 'İsmayıllı', 'Nabran', 'Şəki', 'Quba', 'Mərdəkan']
+
+export function SearchPanel({ filters, onSearch, onClear }: SearchPanelProps) {
+  const [values, setValues] = useState<RentalHomeFilters>(filters ?? {})
   const [more, setMore] = useState(false)
 
+  useEffect(() => {
+    setValues(filters ?? {})
+  }, [filters])
+
+  const set = (key: keyof RentalHomeFilters, value: string) => setValues((current) => ({ ...current, [key]: value }))
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    onSearch?.(values)
+  }
+
   return (
-    <div className="search-panel">
+    <form className="search-panel" onSubmit={submit}>
       <div className="search-fields">
         <label className="search-field">
-          <span><MapPin size={16} /> Məkan</span>
-          <select value={city} onChange={(event) => setCity(event.target.value)}>
-            <option value="">Bütün bölgələr</option><option>Qəbələ</option><option>İsmayıllı</option><option>Nabran</option><option>Şəki</option><option>Quba</option><option>Mərdəkan</option>
+          <span><Search size={16} /> Axtarış</span>
+          <input value={values.q ?? ''} onChange={(event) => set('q', event.target.value)} placeholder="Ev, rayon, təsvir..." />
+        </label>
+        <label className="search-field">
+          <span><MapPin size={16} /> Şəhər</span>
+          <select value={values.city ?? ''} onChange={(event) => set('city', event.target.value)}>
+            <option value="">Bütün bölgələr</option>
+            {cities.map((city) => <option key={city} value={city}>{city}</option>)}
           </select>
         </label>
         <label className="search-field">
-          <span><CalendarDays size={16} /> Tarixlər</span>
-          <input value="12 – 14 iyul" readOnly aria-label="Tarixlər" />
-        </label>
-        <label className="search-field">
           <span><UsersRound size={16} /> Qonaqlar</span>
-          <select defaultValue="4"><option value="2">2 qonaq</option><option value="4">4 qonaq</option><option value="6">6 qonaq</option><option value="8">8+ qonaq</option></select>
+          <input type="number" min="1" value={values.guests ?? ''} onChange={(event) => set('guests', event.target.value)} placeholder="4" />
         </label>
-        <button className="button button-primary search-button" onClick={() => onSearch?.(city)}><Search size={18} /> Axtar</button>
+        <button className="button button-primary search-button" type="submit"><Search size={18} /> Axtar</button>
       </div>
+
       <div className="quick-filters">
-        <button className={`filter-chip ${more ? 'active' : ''}`} onClick={() => setMore((value) => !value)}><SlidersHorizontal size={15} /> Daha çox filtr</button>
-        <button className="filter-chip">Hovuz</button><button className="filter-chip">Wi-Fi</button><button className="filter-chip">Manqal</button><button className="filter-chip">Parking</button>
+        <button type="button" className={`filter-chip ${more ? 'active' : ''}`} onClick={() => setMore((value) => !value)}>
+          <SlidersHorizontal size={15} /> Daha çox filtr
+        </button>
+        <button type="button" className="filter-chip" onClick={() => set('city', 'Qəbələ')}>Qəbələ</button>
+        <button type="button" className="filter-chip" onClick={() => set('city', 'İsmayıllı')}>İsmayıllı</button>
+        <button type="button" className="filter-chip" onClick={() => set('guests', '8')}>8+ qonaq</button>
+        <button type="button" className="filter-chip" onClick={onClear}>Təmizlə</button>
       </div>
-      {more && <div className="more-filters"><label>Minimum qiymət<input type="number" placeholder="50 ₼" /></label><label>Maksimum qiymət<input type="number" placeholder="300 ₼" /></label><label>Otaq sayı<select><option>Fərqi yoxdur</option><option>2+</option><option>3+</option><option>4+</option></select></label><button className="button button-dark">Filtrləri tətbiq et</button></div>}
-    </div>
+
+      {more && (
+        <div className="more-filters">
+          <label>Rayon / qəsəbə<input value={values.district ?? ''} onChange={(event) => set('district', event.target.value)} placeholder="Vəndam" /></label>
+          <label>Minimum qiymət<input type="number" min="0" value={values.minPrice ?? ''} onChange={(event) => set('minPrice', event.target.value)} placeholder="50 ₼" /></label>
+          <label>Maksimum qiymət<input type="number" min="0" value={values.maxPrice ?? ''} onChange={(event) => set('maxPrice', event.target.value)} placeholder="300 ₼" /></label>
+          <label><span><CalendarDays size={14} /> Başlanğıc</span><input type="date" value={values.startDate ?? ''} onChange={(event) => set('startDate', event.target.value)} /></label>
+          <label><span><CalendarDays size={14} /> Bitiş</span><input type="date" value={values.endDate ?? ''} onChange={(event) => set('endDate', event.target.value)} /></label>
+          <button className="button button-dark" type="submit">Filtrləri tətbiq et</button>
+        </div>
+      )}
+    </form>
   )
 }

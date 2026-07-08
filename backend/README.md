@@ -103,6 +103,21 @@ Development rejimində `/api/auth/send` telefon nömrəsi üçün 5 dəqiqəlik 
 - PUT /api/rental-homes/{id}
 - DELETE /api/rental-homes/{id}
 
+`GET /api/rental-homes` returns only published, non-deleted homes and supports simple MVP search filters:
+
+- `city`
+- `district`
+- `guests`
+- `minPrice`
+- `maxPrice`
+- `startDate`
+- `endDate`
+- `q`
+
+City and district are normalized exact matches. `guests` returns homes with `guest_count >= guests`. Price filters apply to `daily_price`. `q` performs a simple contains search over title, city, district, and description. `startDate` and `endDate` must be provided together in valid date format; the range is inclusive and returns only homes without overlapping manual availability blocks or blocking bookings. Cancelled and rejected bookings do not block public date availability; pending bookings still block, matching current booking creation behavior.
+
+Invalid guest count, price ranges, one-sided date ranges, bad date format, or `startDate > endDate` return `400 Bad Request`.
+
 ### Bookings
 
 - GET /api/bookings
