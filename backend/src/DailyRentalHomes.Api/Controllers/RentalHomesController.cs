@@ -22,15 +22,82 @@ public sealed class RentalHomesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetList(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetList([FromQuery] PublicRentalHomeSearchRequest? request = null, CancellationToken cancellationToken = default)
     {
-        var items = await _db.RentalHomes
+        request ??= new PublicRentalHomeSearchRequest();
+        var validation = ValidateSearch(request, out var startDate, out var endDate);
+        if (validation is not null)
+        {
+            return BadRequest(ApiResponse<object>.Fail(validation));
+        }
+
+        var query = _db.RentalHomes
             .AsNoTracking()
-            .Where(x => !x.IsDeleted && x.IsPublished)
+            .Where(x => !x.IsDeleted && x.IsPublished);
+
+        if (!string.IsNullOrWhiteSpace(request.City))
+        {
+            var city = Normalize(request.City);
+            query = query.Where(x => x.City.ToLower() == city);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.District))
+        {
+            var district = Normalize(request.District);
+            query = query.Where(x => x.District != null && x.District.ToLower() == district);
+        }
+
+        if (request.Guests.HasValue)
+        {
+            query = query.Where(x => x.GuestCount >= request.Guests.Value);
+        }
+
+        if (request.MinPrice.HasValue)
+        {
+            query = query.Where(x => x.DailyPrice >= request.MinPrice.Value);
+        }
+
+        if (request.MaxPrice.HasValue)
+        {
+            query = query.Where(x => x.DailyPrice <= request.MaxPrice.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Q))
+        {
+            var keyword = Normalize(request.Q);
+            query = query.Where(x =>
+                x.Title.ToLower().Contains(keyword) ||
+                x.City.ToLower().Contains(keyword) ||
+                (x.District != null && x.District.ToLower().Contains(keyword)) ||
+                x.Description.ToLower().Contains(keyword));
+        }
+
+        if (startDate.HasValue && endDate.HasValue)
+        {
+            query = query.Where(home =>
+                !_db.RentalHomeAvailabilityBlocks.Any(block =>
+                    !block.IsDeleted &&
+                    block.RentalHomeId == home.Id &&
+                    block.StartDate <= endDate.Value &&
+                    block.EndDate >= startDate.Value) &&
+                !_db.BookingDates.Any(date =>
+                    !date.IsDeleted &&
+                    date.Date >= startDate.Value &&
+                    date.Date <= endDate.Value &&
+                    date.Booking != null &&
+                    !date.Booking.IsDeleted &&
+                    date.Booking.RentalHomeId == home.Id &&
+                    date.Booking.Status != null &&
+                    date.Booking.Status.Code != BookingStatusCodes.Cancelled &&
+                    date.Booking.Status.Code != BookingStatusCodes.Rejected));
+        }
+
+        var items = await query
             .OrderByDescending(x => x.Id)
             .Select(x => new RentalHomeResponse(
                 x.Id,
                 x.Title,
+                x.Description,
                 x.City,
                 x.District,
                 x.DailyPrice,
@@ -46,6 +113,60 @@ public sealed class RentalHomesController : ControllerBase
 
         return Ok(ApiResponse<object>.Ok(items));
     }
+
+    private static string? ValidateSearch(PublicRentalHomeSearchRequest request, out DateOnly? startDate, out DateOnly? endDate)
+    {
+        startDate = null;
+        endDate = null;
+
+        if (request.Guests < 0)
+        {
+            return "Guest count must not be negative.";
+        }
+
+        if (request.MinPrice < 0 || request.MaxPrice < 0)
+        {
+            return "Price filters must not be negative.";
+        }
+
+        if (request.MinPrice.HasValue && request.MaxPrice.HasValue && request.MinPrice > request.MaxPrice)
+        {
+            return "Minimum price must not be greater than maximum price.";
+        }
+
+        var hasStart = !string.IsNullOrWhiteSpace(request.StartDate);
+        var hasEnd = !string.IsNullOrWhiteSpace(request.EndDate);
+        if (hasStart != hasEnd)
+        {
+            return "Both startDate and endDate are required for date availability filtering.";
+        }
+
+        if (!hasStart && !hasEnd)
+        {
+            return null;
+        }
+
+        if (!DateOnly.TryParse(request.StartDate, out var parsedStart))
+        {
+            return "startDate must be a valid date in YYYY-MM-DD format.";
+        }
+
+        if (!DateOnly.TryParse(request.EndDate, out var parsedEnd))
+        {
+            return "endDate must be a valid date in YYYY-MM-DD format.";
+        }
+
+        if (parsedStart > parsedEnd)
+        {
+            return "startDate must not be after endDate.";
+        }
+
+        startDate = parsedStart;
+        endDate = parsedEnd;
+        return null;
+    }
+
+    private static string Normalize(string value) => value.Trim().ToLowerInvariant();
 
     [HttpGet("{id:long}")]
     public async Task<IActionResult> GetById(long id, CancellationToken cancellationToken)

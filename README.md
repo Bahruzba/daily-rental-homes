@@ -85,6 +85,8 @@ Booking lifecycle MVP: new customer bookings start as `pending`. A broker can ac
 
 Customer account MVP: customers can open `/account` to see their own bookings, status, selected dates, total amount, rental home summary, and beh/deposit state. Booking detail shows the next required action, deposit instructions, uploaded receipt link, broker review note, and re-upload option when a rejected receipt allows it.
 
+Public search MVP: the homepage can filter published rental homes by keyword, city, district, guest capacity, daily price range, and an available date range. Date availability excludes homes with overlapping manual broker blocks or blocking bookings; rejected and cancelled bookings do not block dates, while pending behavior follows the existing backend blocking rule.
+
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.

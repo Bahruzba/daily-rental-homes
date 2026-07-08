@@ -27,6 +27,17 @@ type BookingCreatedApiModel = {
   createdAt: string
 }
 
+export type RentalHomeFilters = {
+  q?: string
+  city?: string
+  district?: string
+  guests?: string
+  minPrice?: string
+  maxPrice?: string
+  startDate?: string
+  endDate?: string
+}
+
 export class BookingRequestError extends Error {
   constructor(message: string, readonly technicalCause?: unknown) {
     super(message)
@@ -64,22 +75,69 @@ function withMockPresentation(home: RentalHomeApiModel): RentalHome {
   }
 }
 
+export class RentalHomesRequestError extends Error {
+  constructor(message: string, readonly technicalCause?: unknown) {
+    super(message)
+    this.name = 'RentalHomesRequestError'
+  }
+}
+
 function resolveAssetUrl(url: string) {
   return /^https?:|^blob:/i.test(url) ? url : `${baseUrl}${url}`
 }
 
-export async function getRentalHomes(): Promise<RentalHome[]> {
-  if (!useLiveApi) return demoHomes
+function normalize(value: string | undefined) {
+  return (value ?? '').trim().toLocaleLowerCase('az-AZ')
+}
+
+function dateRangeOverlaps(range: { startDate: string; endDate: string }, startDate: string, endDate: string) {
+  return range.startDate <= endDate && range.endDate >= startDate
+}
+
+function applyMockFilters(homes: RentalHome[], filters: RentalHomeFilters = {}) {
+  const q = normalize(filters.q)
+  const city = normalize(filters.city)
+  const district = normalize(filters.district)
+  const guests = Number(filters.guests || 0)
+  const minPrice = Number(filters.minPrice || 0)
+  const maxPrice = Number(filters.maxPrice || 0)
+  return homes.filter((home) => {
+    if (city && normalize(home.city) !== city) return false
+    if (district && normalize(home.district ?? '') !== district) return false
+    if (guests > 0 && home.guestCount < guests) return false
+    if (minPrice > 0 && home.dailyPrice < minPrice) return false
+    if (maxPrice > 0 && home.dailyPrice > maxPrice) return false
+    if (q) {
+      const haystack = [home.title, home.city, home.district ?? '', home.description].map(normalize).join(' ')
+      if (!haystack.includes(q)) return false
+    }
+    if (filters.startDate && filters.endDate && home.unavailableRanges?.some((range) => dateRangeOverlaps(range, filters.startDate!, filters.endDate!))) return false
+    return true
+  })
+}
+
+function queryString(filters: RentalHomeFilters = {}) {
+  const params = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && `${value}`.trim()) params.set(key, `${value}`.trim())
+  })
+  const query = params.toString()
+  return query ? `?${query}` : ''
+}
+
+export async function getRentalHomes(filters: RentalHomeFilters = {}): Promise<RentalHome[]> {
+  if (!useLiveApi) return applyMockFilters(demoHomes, filters)
 
   try {
-    const response = await fetch(`${baseUrl}/api/rental-homes`)
-    if (!response.ok) throw new Error('Rental homes request failed')
+    const response = await fetch(`${baseUrl}/api/rental-homes${queryString(filters)}`)
     const payload = (await response.json()) as ApiResponse<RentalHomeApiModel[]>
-    return payload.success && payload.data?.length
-      ? payload.data.map(withMockPresentation)
-      : demoHomes
-  } catch {
-    return demoHomes
+    if (!response.ok || !payload.success || !payload.data) {
+      throw new RentalHomesRequestError(payload.error || 'Ev siyahısı yüklənmədi.')
+    }
+    return payload.data.map(withMockPresentation)
+  } catch (technicalCause) {
+    if (technicalCause instanceof RentalHomesRequestError) throw technicalCause
+    throw new RentalHomesRequestError('Serverlə əlaqə qurmaq mümkün olmadı. Bir qədər sonra yenidən yoxlayın.', technicalCause)
   }
 }
 

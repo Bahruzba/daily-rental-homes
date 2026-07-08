@@ -3,6 +3,7 @@ namespace DailyRentalHomes.Api.Contracts.RentalHomes;
 public sealed record RentalHomeResponse(
     long Id,
     string Title,
+    string Description,
     string City,
     string? District,
     decimal DailyPrice,

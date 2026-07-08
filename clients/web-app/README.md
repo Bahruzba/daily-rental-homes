@@ -47,6 +47,19 @@ npm run dev
 
 Booking səhifəsi giriş tələb etmir və həm mock, həm live rejimdə işləməyə davam edir.
 
+Homepage/public listing filterləri:
+
+- açar söz (`q`)
+- şəhər (`city`)
+- rayon/qəsəbə (`district`)
+- qonaq sayı (`guests`)
+- minimum/maksimum qiymət (`minPrice`, `maxPrice`)
+- uyğun tarix aralığı (`startDate`, `endDate`)
+
+Filterlər URL query param-larında saxlanılır. Live rejimdə frontend bu param-ləri `GET /api/rental-homes` endpoint-inə göndərir. Mock rejimdə eyni əsas filterlər lokal demo data üzərində simulyasiya olunur. Tarix filterində yalnız bir tarix seçilərsə və ya başlanğıc bitişdən sonra olarsa, frontend API çağırmadan oxunaqlı xəta göstərir.
+
+Date availability davranışı backend qaydasına uyğundur: manual broker blokları və aktiv/blocking booking-lər seçilmiş tarix aralığında evi siyahıdan çıxarır. Rejected və cancelled booking-lər tarixləri bloklamır; pending booking-lər hələ mövcud qaydaya əsasən bloklayır.
+
 Customer `/account` səhifəsi müştərinin öz rezervasiyalarını kart formatında göstərir: ev adı, şəhər/rayon, tarix sayı, toplam məbləğ, booking statusu, beh/qəbz statusu və növbəti addım. `/account/bookings/:id` səhifəsi ev xülasəsi, seçilmiş tarixlər, qonaq sayı, qiymət, status izahı və beh məlumatlarını daha detallı göstərir.
 
 Customer-visible status davranışı:
