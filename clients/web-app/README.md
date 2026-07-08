@@ -78,6 +78,16 @@ Live rejimdə `/broker` mövcud JWT-ni Bearer token kimi göndərərək broker s
 
 Broker booking detail səhifəsində pending rezervasiyanı təsdiqləmək, rədd etmək və ya ləğv etmək olur. Confirmed və waiting-deposit rezervasiyaları ləğv edilə bilər. Live rejimdə bu düymələr `/api/broker/bookings/{id}/accept`, `/reject`, `/cancel` endpoint-lərini çağırır; mock rejimdə eyni status keçidləri lokal simulyasiya olunur. Rədd edilmiş və ləğv edilmiş rezervasiyalar availability-ni bloklamır; pending davranışı hələ backend qaydasına uyğun olaraq bloklayır.
 
+Broker `/broker` dashboard rezervasiya siyahısında sadə filterlər var:
+
+- status
+- başlanğıc tarix
+- bitiş tarix
+
+Live rejimdə status və tarix filterləri `GET /api/broker/bookings` endpoint-inə query param kimi göndərilir. Mock rejimdə eyni filterlər lokal demo rezervasiyalar üzərində tətbiq olunur. Tarix filterində yalnız bir tarix seçilərsə və ya başlanğıc tarixi bitiş tarixindən sonra olarsa, frontend API çağırmadan oxunaqlı xəta göstərir. “Təmizlə” düyməsi filterləri sıfırlayır və bütün rezervasiyaları yenidən yükləyir.
+
+Siyahı kartları booking ID, ev adı, müştəri adı/telefonu, tarix aralığı, gecə sayı, status və toplam məbləği göstərir. Status chip-ləri hazırda yüklənmiş nəticələrin qısa xülasəsidir; pagination və inkişaf etmiş axtarış bu mərhələyə daxil deyil.
+
 ## Broker ev idarəetməsi
 
 Broker panelində `Ev əlavə et` düyməsi `/broker/rental-homes/new` səhifəsini açır. Mövcud ev kartına klik `/broker/rental-homes/:id/edit` idarəetmə səhifəsinə aparır.

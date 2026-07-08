@@ -108,6 +108,12 @@ export type BrokerBooking = {
   isDepositPending: boolean
 }
 
+export type BrokerBookingFilters = {
+  status?: string
+  from?: string
+  to?: string
+}
+
 export type BrokerBookingDetail = {
   bookingId: number
   rentalHome: { id: number; title: string; city: string; district?: string | null }
@@ -390,9 +396,14 @@ export async function deleteBrokerAvailabilityBlock(id: number, blockId: number,
   return request<{ id: number }>(`/api/broker/rental-homes/${id}/availability-blocks/${blockId}`, token, { method: 'DELETE' })
 }
 
-export async function getBrokerBookings(token: string): Promise<BrokerBooking[]> {
-  if (!useLiveApi) return mockBookings
-  return request('/api/broker/bookings', token)
+export async function getBrokerBookings(token: string, filters: BrokerBookingFilters = {}): Promise<BrokerBooking[]> {
+  if (!useLiveApi) return applyMockBrokerBookingFilters(mockBookings, filters)
+  const search = new URLSearchParams()
+  if (filters.status?.trim()) search.set('status', filters.status.trim())
+  if (filters.from?.trim()) search.set('from', filters.from.trim())
+  if (filters.to?.trim()) search.set('to', filters.to.trim())
+  const query = search.toString()
+  return request(`/api/broker/bookings${query ? `?${query}` : ''}`, token)
 }
 
 export async function getBrokerBooking(id: number, token: string): Promise<BrokerBookingDetail> {
@@ -565,4 +576,15 @@ function mockBookingDates(booking: BrokerBooking): string[] {
   if (!booking.lastDate || booking.firstDate === booking.lastDate) return [booking.firstDate]
   if (booking.bookingId === 1001) return [booking.firstDate, '2026-07-13', booking.lastDate]
   return [booking.firstDate, booking.lastDate]
+}
+
+function applyMockBrokerBookingFilters(bookings: BrokerBooking[], filters: BrokerBookingFilters): BrokerBooking[] {
+  return bookings.filter((booking) => {
+    if (filters.status?.trim() && booking.statusCode !== filters.status.trim()) return false
+    if (filters.from?.trim() && filters.to?.trim()) {
+      const dates = mockBookingDates(booking)
+      return dates.some((date) => date >= filters.from! && date <= filters.to!)
+    }
+    return true
+  })
 }
