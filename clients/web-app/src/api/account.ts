@@ -29,6 +29,7 @@ export type AccountBookingDetail = AccountBooking & {
 }
 
 type MockCancelRequest = { reason?: string; requestedAt: string }
+type BookingCancellationResponse = { id: number; bookingId: number; statusCode: string; reason?: string | null; createdAt: string }
 
 export class AccountRequestError extends Error {
   constructor(message: string, readonly technicalCause?: unknown) {
@@ -138,9 +139,13 @@ export async function uploadDepositReceipt(id: number, file: File, token: string
   return request(`/api/account/bookings/${id}/deposit/receipt`, token, { method: 'POST', body })
 }
 
-export async function requestBookingCancellation(id: number, reason: string, _token: string) {
+export async function requestBookingCancellation(id: number, reason: string, token: string) {
   if (useLiveApi) {
-    throw new AccountRequestError('Bu funksiya hələ canlı rejimdə aktiv deyil.')
+    return request<BookingCancellationResponse>(`/api/account/bookings/${id}/cancellation-requests`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason.trim() || null }),
+    })
   }
 
   const booking = mockBooking(id)

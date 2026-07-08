@@ -1,7 +1,7 @@
 import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Home, Send, UploadCloud } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getAccountBooking, isAccountLiveApiEnabled, requestBookingCancellation, uploadDepositReceipt, type AccountBookingDetail } from '../api/account'
+import { getAccountBooking, requestBookingCancellation, uploadDepositReceipt, type AccountBookingDetail } from '../api/account'
 import { resolveApiAssetUrl } from '../api/broker'
 import { useAuth } from '../auth/AuthContext'
 import { AppLayout } from '../components/AppLayout'
@@ -87,11 +87,6 @@ export function AccountBookingDetailPage() {
 
     if (!cancellableStatuses.includes(booking.statusCode)) {
       setError('Bu rezervasiya statusu üçün ləğv sorğusu göndərmək mümkün deyil.')
-      return
-    }
-
-    if (isAccountLiveApiEnabled) {
-      setError('Bu funksiya hələ canlı rejimdə aktiv deyil.')
       return
     }
 

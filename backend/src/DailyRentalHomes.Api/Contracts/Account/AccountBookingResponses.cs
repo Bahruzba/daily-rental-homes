@@ -30,4 +30,5 @@ public sealed record AccountBookingDetailResponse(
     IReadOnlyList<DateOnly> Dates,
     string? Note,
     DepositResponse? Deposit,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    bool CancelRequestSent);

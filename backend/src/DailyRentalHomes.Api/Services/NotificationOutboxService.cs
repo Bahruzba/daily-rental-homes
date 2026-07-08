@@ -21,6 +21,16 @@ public sealed class NotificationOutboxService : INotificationOutboxService
             "Yeni rezervasiya", $"{home.Title} üçün yeni rezervasiya #{booking.Id} yaradıldı.", booking, null, DateTime.UtcNow);
     }
 
+    public async Task QueueBookingCancellationRequestedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken)
+    {
+        var broker = await BrokerFor(booking, cancellationToken);
+        if (broker is null) return;
+        Queue(broker.Id, broker.FullName, broker.PhoneNumber, NotificationTypeCodes.BookingCancellationRequested,
+            "Rezervasiya cancel request",
+            $"Booking #{booking.Id} cancellation requested by {booking.CustomerFullName}, phone: {booking.CustomerPhoneNumber}.",
+            booking, booking.Deposit, DateTime.UtcNow);
+    }
+
     public Task QueueDepositRequestedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
     {
         Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,

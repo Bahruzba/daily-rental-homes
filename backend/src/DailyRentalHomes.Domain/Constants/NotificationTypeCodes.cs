@@ -3,6 +3,7 @@ namespace DailyRentalHomes.Domain.Constants;
 public static class NotificationTypeCodes
 {
     public const string BookingCreated = "booking_created";
+    public const string BookingCancellationRequested = "booking_cancellation_requested";
     public const string BookingStatusChanged = "booking_status_changed";
     public const string DepositRequested = "deposit_requested";
     public const string DepositDeadlineReminder = "deposit_deadline_reminder";

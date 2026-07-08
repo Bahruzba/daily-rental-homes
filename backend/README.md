@@ -199,10 +199,15 @@ Customer endpoints (Customer JWT, matched by booking customer/user or verified p
 - GET /api/account/bookings
 - GET /api/account/bookings/{id}
 - POST /api/account/bookings/{id}/deposit/receipt (`multipart/form-data`, field: `file`)
+- POST /api/account/bookings/{id}/cancellation-requests
 
 Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Customer account booking list/detail responses include booking status, selected dates, total amount, rental home city/district/main image, and deposit instructions when available. Customer-visible deposit data includes amount, deadline, status, card holder, masked PAN, bank name, broker instruction note, uploaded receipt, review note, and `allowReupload`; broker-only private availability notes are not exposed.
 
 Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Customers can upload only for bookings matched to their account/user or verified phone. Upload is allowed only when the deposit is waiting for a receipt, or when it was rejected with `allowReupload = true`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+
+Customer cancellation requests are stored in `booking_cancellation_requests`. `POST /api/account/bookings/{id}/cancellation-requests` accepts optional JSON `{ "reason": "..." }`; reason is limited to 1000 characters. Customers can request cancellation only for their own active bookings in `pending`, `waiting_deposit`, `confirmed`, or `paid`. `completed`, `rejected`, and `cancelled` bookings return `400 Bad Request`. If the booking is not owned by the customer, the API returns the existing not-found behavior. A duplicate active `pending` cancellation request returns `400 Bad Request` with a readable message.
+
+Submitting a cancellation request does not change the booking status, does not release availability, does not refund, and does not change deposit state. Account booking detail responses include `cancelRequestSent = true` when an active pending request exists. A new request queues a `booking_cancellation_requested` notification outbox record for the broker contact using the existing outbox pattern; there is still no automatic delivery worker/provider in this MVP.
 
 Customer-visible status meanings:
 
@@ -281,7 +286,7 @@ Revenue totals exclude `rejected` and `cancelled` bookings. The current revenue 
 
 - GET /api/admin/notifications (Admin JWT)
 
-The existing `outbound_messages` table is reused as the MVP notification outbox. Booking creation, deposit request, receipt upload, deposit approval/rejection, and broker booking-status changes create `pending` records; no real WhatsApp or SMS provider sends these notifications yet. Records use stable channel (`whatsapp`, `sms`, `in_app`), type, and status (`pending`, `sent`, `failed`, `cancelled`, `skipped`) codes. The Admin endpoint supports optional `status`, `type`, and `bookingId` filters.
+The existing `outbound_messages` table is reused as the MVP notification outbox. Booking creation, customer cancellation request, deposit request, receipt upload, deposit approval/rejection, and broker booking-status changes create `pending` records; no real WhatsApp or SMS provider sends these notifications yet. Records use stable channel (`whatsapp`, `sms`, `in_app`), type, and status (`pending`, `sent`, `failed`, `cancelled`, `skipped`) codes. The Admin endpoint supports optional `status`, `type`, and `bookingId` filters.
 
 When a deposit is requested, an immediate `deposit_requested` record is created. If the deadline is more than three hours away, `deposit_deadline_reminder` is scheduled two hours before it. If it is between 30 minutes and three hours away, the reminder is scheduled 30 minutes before it; closer deadlines skip the reminder.
 

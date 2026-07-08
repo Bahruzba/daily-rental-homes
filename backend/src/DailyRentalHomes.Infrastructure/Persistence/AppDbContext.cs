@@ -25,6 +25,7 @@ public sealed class AppDbContext : DbContext, IAppDbContext
     public DbSet<BookingDate> BookingDates => Set<BookingDate>();
     public DbSet<BookingDeposit> BookingDeposits => Set<BookingDeposit>();
     public DbSet<BookingExpense> BookingExpenses => Set<BookingExpense>();
+    public DbSet<BookingCancellationRequest> BookingCancellationRequests => Set<BookingCancellationRequest>();
     public DbSet<BookingStatus> BookingStatuses => Set<BookingStatus>();
     public DbSet<BookingStatusHistory> BookingStatusHistory => Set<BookingStatusHistory>();
     public DbSet<PaymentCard> PaymentCards => Set<PaymentCard>();
