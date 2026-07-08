@@ -152,6 +152,8 @@ Booking status lifecycle MVP:
 
 The generic broker status endpoint remains for backward compatibility and permits cancellation only. Deposit request/approval flow remains separate: accepting a booking does not automatically create a deposit, and requesting a deposit still moves an eligible booking to `waiting_deposit`. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
+Broker booking detail (`GET /api/broker/bookings/{id}`) includes a nullable `cancellationRequest` summary when the booking has an active pending customer cancellation request. The summary contains `id`, `statusCode`, optional `reason`, and `createdAt`. This is read-only contract data for the broker UI; this PR does not add approve/reject cancellation-request workflow and does not automatically cancel bookings.
+
 ### Broker rental home management
 
 Broker/Admin JWT endpoints:

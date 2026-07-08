@@ -127,6 +127,14 @@ export type BrokerBookingDetail = {
   createdAt: string
   statusHistory: Array<{ oldStatusCode?: string | null; newStatusCode: string; note?: string | null; changedAt: string }>
   deposit?: DepositInfo | null
+  cancellationRequest?: BrokerCancellationRequest | null
+}
+
+export type BrokerCancellationRequest = {
+  id: number
+  statusCode: string
+  reason?: string | null
+  createdAt: string
 }
 
 export type DepositInfo = {
@@ -219,6 +227,15 @@ function readMockExpenses() {
 
 const mockExpenses: Record<number, BrokerBookingExpense[]> = readMockExpenses()
 function persistMockExpenses() { window.localStorage.setItem(mockExpenseStorageKey, JSON.stringify(mockExpenses)) }
+
+const mockCancellationRequests: Record<number, BrokerCancellationRequest | undefined> = {
+  1001: {
+    id: 7001,
+    statusCode: 'pending',
+    reason: 'Plan dəyişdi, mümkün olsa rezervasiyanı ləğv etmək istəyirik.',
+    createdAt: '2026-07-08T09:30:00Z',
+  },
+}
 
 export function getMockBrokerBookings() { return mockBookings }
 
@@ -423,6 +440,7 @@ export async function getBrokerBooking(id: number, token: string): Promise<Broke
       createdAt: booking.createdAt,
       statusHistory: [],
       deposit: mockDeposits[id] ?? null,
+      cancellationRequest: mockCancellationRequests[id] ?? null,
     }
   }
   return request(`/api/broker/bookings/${id}`, token)

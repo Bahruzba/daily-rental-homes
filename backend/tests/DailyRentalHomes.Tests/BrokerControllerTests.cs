@@ -102,6 +102,42 @@ public sealed class BrokerControllerTests
     }
 
     [Fact]
+    public async Task BookingDetailIncludesPendingCancellationRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.AddRange(
+            new BookingCancellationRequest
+            {
+                Id = 501,
+                BookingId = 1001,
+                RequestedByUserId = 30,
+                StatusCode = "pending",
+                Reason = "Customer plans changed",
+                CreatedAt = new DateTime(2026, 7, 8, 12, 0, 0, DateTimeKind.Utc)
+            },
+            new BookingCancellationRequest
+            {
+                Id = 502,
+                BookingId = 1001,
+                RequestedByUserId = 30,
+                StatusCode = "resolved",
+                Reason = "Old request",
+                CreatedAt = new DateTime(2026, 7, 7, 12, 0, 0, DateTimeKind.Utc)
+            });
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetBookingById(1001, default);
+        var detail = GetData<BrokerBookingDetailResponse>(result);
+
+        Assert.NotNull(detail.CancellationRequest);
+        Assert.Equal(501, detail.CancellationRequest.Id);
+        Assert.Equal("pending", detail.CancellationRequest.StatusCode);
+        Assert.Equal("Customer plans changed", detail.CancellationRequest.Reason);
+    }
+
+    [Fact]
     public async Task AllowedStatusChangeCreatesHistory()
     {
         await using var context = CreateContext();

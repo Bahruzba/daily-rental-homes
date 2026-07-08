@@ -281,6 +281,30 @@ export function BrokerBookingDetailPage() {
               {error && <div className="broker-error" role="alert">{error}</div>}
               {success && <div className="account-success" role="status">{success}</div>}
 
+              {booking.cancellationRequest && (
+                <div className="broker-cancellation-panel">
+                  <div>
+                    <span className="eyebrow">LƏĞV SORĞUSU</span>
+                    <h2>Müştəri ləğv sorğusu göndərib</h2>
+                    <p>Bu sorğu rezervasiyanı avtomatik ləğv etmir. Qərarı broker ayrıca verməlidir.</p>
+                  </div>
+                  <div className="broker-cancellation-meta">
+                    <span>Status</span>
+                    <strong>{booking.cancellationRequest.statusCode}</strong>
+                    <span>Göndərilmə vaxtı</span>
+                    <strong>{dateTime.format(new Date(booking.cancellationRequest.createdAt))}</strong>
+                  </div>
+                  {booking.cancellationRequest.reason && (
+                    <p className="broker-cancellation-reason">Səbəb: {booking.cancellationRequest.reason}</p>
+                  )}
+                  <div className="broker-cancellation-actions">
+                    <button className="button button-ghost" disabled>Təsdiqlə</button>
+                    <button className="button button-ghost" disabled>Rədd et</button>
+                    <small>Qərar vermə funksiyası növbəti mərhələdə əlavə olunacaq.</small>
+                  </div>
+                </div>
+              )}
+
               <div className="broker-detail-layout">
                 <div className="broker-detail-main">
                   <article>
