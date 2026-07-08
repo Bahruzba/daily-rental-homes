@@ -238,6 +238,32 @@ Expense fields:
 
 Validation requires booking, type, title, and amount greater than zero. The current scope is storage and broker CRUD only; report summary endpoints and frontend UI will come in later PRs.
 
+### Broker report summary
+
+Broker/Admin JWT endpoint:
+
+- GET /api/broker/reports/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+
+Broker users receive report totals only for bookings linked to their own rental homes. Admin users receive totals for all bookings. Customer and unauthenticated users cannot access the endpoint.
+
+Date parameters are optional. If no date range is provided, the summary uses all available booking data in the caller's scope. If a range is provided, both `from` and `to` are required, the range is inclusive, and a booking is included when at least one non-deleted booking date falls inside the range. One-sided ranges or `from > to` return `400 Bad Request`.
+
+Revenue totals exclude `rejected` and `cancelled` bookings. The current revenue statuses are:
+
+- `pending`
+- `waiting_deposit`
+- `confirmed`
+- `paid`
+- `completed`
+
+`totalBookingAmount` sums each included revenue booking's total amount once, not once per booking date. Expenses are grouped from non-deleted expenses belonging to the included bookings:
+
+- `totalCleaningCost` uses `typeCode = cleaning`
+- `totalOwnerPayout` uses `typeCode = owner_payout`
+- `totalOtherExpenses` includes all other expense type codes
+
+`estimatedProfit` is calculated as `totalBookingAmount - totalExpenses`. Soft-deleted bookings, rental homes, booking dates, and expenses are ignored. There is no frontend report dashboard UI yet.
+
 ### Deposits
 
 - GET /api/deposits
