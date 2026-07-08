@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Phone, PlusCircle, ReceiptText, Trash2, Upload, UserRound, XCircle } from 'lucide-react'
+import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, PencilLine, Phone, PlusCircle, ReceiptText, Trash2, Upload, UserRound, XCircle } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
@@ -13,6 +13,7 @@ import {
   rejectBrokerDeposit,
   requestBrokerDeposit,
   resolveApiAssetUrl,
+  updateBrokerBookingExpense,
   type BrokerBookingDetail,
   type BrokerBookingExpense,
 } from '../api/broker'
@@ -77,6 +78,7 @@ export function BrokerBookingDetailPage() {
   const [expenseTitle, setExpenseTitle] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseNote, setExpenseNote] = useState('')
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null)
 
   const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses])
   const estimatedProfit = (booking?.totalAmount ?? 0) - totalExpenses
@@ -176,6 +178,28 @@ export function BrokerBookingDetailPage() {
     )
   }
 
+  const resetExpenseForm = () => {
+    setExpenseType('cleaning')
+    setExpenseTitle('')
+    setExpenseAmount('')
+    setExpenseNote('')
+    setEditingExpenseId(null)
+  }
+
+  const startEditExpense = (expense: BrokerBookingExpense) => {
+    setExpenseType(expense.typeCode)
+    setExpenseTitle(expense.title)
+    setExpenseAmount(String(expense.amount))
+    setExpenseNote(expense.note ?? '')
+    setEditingExpenseId(expense.id)
+    setExpenseError('')
+  }
+
+  const cancelEditExpense = () => {
+    resetExpenseForm()
+    setExpenseError('')
+  }
+
   const submitExpense = async (event: FormEvent) => {
     event.preventDefault()
     if (!session) return
@@ -188,20 +212,24 @@ export function BrokerBookingDetailPage() {
     setExpenseError('')
     setSuccess('')
     try {
-      await createBrokerBookingExpense(bookingId, {
+      const payload = {
         typeCode: expenseType,
         title: expenseTitle.trim(),
         amount: amountValue,
         note: expenseNote.trim() || undefined,
-      }, session.accessToken)
-      setSuccess('Xərc əlavə edildi.')
-      setExpenseTitle('')
-      setExpenseAmount('')
-      setExpenseNote('')
+      }
+      if (editingExpenseId) {
+        await updateBrokerBookingExpense(bookingId, editingExpenseId, payload, session.accessToken)
+        setSuccess('Xərc yeniləndi.')
+      } else {
+        await createBrokerBookingExpense(bookingId, payload, session.accessToken)
+        setSuccess('Xərc əlavə edildi.')
+      }
+      resetExpenseForm()
       await loadExpenses()
     } catch (cause) {
-      console.error('Broker expense create failed', cause)
-      setExpenseError(cause instanceof Error ? cause.message : 'Xərc əlavə edilmədi.')
+      console.error('Broker expense save failed', cause)
+      setExpenseError(cause instanceof Error ? cause.message : editingExpenseId ? 'Xərc yenilənmədi.' : 'Xərc əlavə edilmədi.')
     } finally {
       setExpenseSaving(false)
     }
@@ -215,6 +243,7 @@ export function BrokerBookingDetailPage() {
     try {
       await deleteBrokerBookingExpense(bookingId, expenseId, session.accessToken)
       setSuccess('Xərc silindi.')
+      if (editingExpenseId === expenseId) resetExpenseForm()
       await loadExpenses()
     } catch (cause) {
       console.error('Broker expense delete failed', cause)
@@ -325,12 +354,22 @@ export function BrokerBookingDetailPage() {
 
                     {expenseError && <div className="broker-error" role="alert">{expenseError}</div>}
 
-                    <form className="expense-form input-grid" onSubmit={submitExpense}>
+                    <form className={`expense-form input-grid${editingExpenseId ? ' is-editing' : ''}`} onSubmit={submitExpense}>
+                      <div className="expense-form-heading full">
+                        <div>
+                          <strong>{editingExpenseId ? 'Xərci redaktə et' : 'Yeni xərc əlavə et'}</strong>
+                          {editingExpenseId && <span>Seçilmiş xərc formaya yüklənib.</span>}
+                        </div>
+                        {editingExpenseId && <button type="button" className="button button-ghost" onClick={cancelEditExpense} disabled={expenseSaving}>Ləğv et</button>}
+                      </div>
                       <label><span>Xərc növü</span><select value={expenseType} onChange={(event) => setExpenseType(event.target.value)}>{Object.entries(expenseLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
                       <label><span>Başlıq</span><input value={expenseTitle} maxLength={150} onChange={(event) => setExpenseTitle(event.target.value)} placeholder="Məs: Təmizlik" /></label>
                       <label><span>Məbləğ</span><input type="number" min="0.01" step="0.01" value={expenseAmount} onChange={(event) => setExpenseAmount(event.target.value)} placeholder="0.00" /></label>
                       <label className="full"><span>Qeyd</span><textarea value={expenseNote} maxLength={1000} onChange={(event) => setExpenseNote(event.target.value)} placeholder="İstəyə bağlı qeyd" /></label>
-                      <button className="button button-primary" disabled={expenseSaving}><PlusCircle size={16} /> Xərc əlavə et</button>
+                      <button className="button button-primary" disabled={expenseSaving}>
+                        {editingExpenseId ? <CheckCircle2 size={16} /> : <PlusCircle size={16} />}
+                        {editingExpenseId ? 'Yadda saxla' : 'Xərc əlavə et'}
+                      </button>
                     </form>
 
                     {expensesLoading ? (
@@ -338,7 +377,7 @@ export function BrokerBookingDetailPage() {
                     ) : expenses.length ? (
                       <div className="expense-list">
                         {expenses.map((expense) => (
-                          <div className="expense-row" key={expense.id}>
+                          <div className={`expense-row${editingExpenseId === expense.id ? ' is-editing' : ''}`} key={expense.id}>
                             <div>
                               <em>{expenseLabels[expense.typeCode] ?? expense.typeCode}</em>
                               <strong>{expense.title}</strong>
@@ -347,6 +386,7 @@ export function BrokerBookingDetailPage() {
                             </div>
                             <div>
                               <strong>{money.format(expense.amount)}</strong>
+                              <button className="button button-ghost expense-edit-button" disabled={expenseSaving} onClick={() => startEditExpense(expense)} aria-label="Xərci redaktə et"><PencilLine size={15} /> Düzəliş et</button>
                               <button className="icon-button" disabled={expenseSaving} onClick={() => void deleteExpense(expense.id)} aria-label="Xərci sil"><Trash2 size={16} /></button>
                             </div>
                           </div>
