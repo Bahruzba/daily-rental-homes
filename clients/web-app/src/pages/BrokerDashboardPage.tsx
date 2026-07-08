@@ -1,5 +1,5 @@
-import { Building2, CalendarDays, ClipboardList, Coins, RefreshCw, WalletCards } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Building2, CalendarDays, ClipboardList, Coins, Phone, RefreshCw, UsersRound, WalletCards } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   getBrokerBookings,
@@ -7,6 +7,7 @@ import {
   getBrokerReportSummary,
   getBrokerSummary,
   type BrokerBooking,
+  type BrokerBookingFilters,
   type BrokerRentalHome,
   type BrokerReportSummary,
   type BrokerSummary,
@@ -18,12 +19,28 @@ import { EmptyState } from '../components/EmptyState'
 const money = new Intl.NumberFormat('az-AZ', { style: 'currency', currency: 'AZN', maximumFractionDigits: 0 })
 const date = new Intl.DateTimeFormat('az-AZ', { day: '2-digit', month: 'short', year: 'numeric' })
 
+const statusOptions = [
+  { value: '', label: 'Hamısı' },
+  { value: 'pending', label: 'Yeni sorğu' },
+  { value: 'waiting_deposit', label: 'Beh gözləyir' },
+  { value: 'confirmed', label: 'Təsdiqlənib' },
+  { value: 'paid', label: 'Ödənilib' },
+  { value: 'completed', label: 'Tamamlanıb' },
+  { value: 'rejected', label: 'Rədd edilib' },
+  { value: 'cancelled', label: 'Ləğv edilib' },
+]
+
 export function BrokerDashboardPage() {
   const { session } = useAuth()
   const [summary, setSummary] = useState<BrokerSummary>()
   const [reportSummary, setReportSummary] = useState<BrokerReportSummary>()
   const [homes, setHomes] = useState<BrokerRentalHome[]>([])
   const [bookings, setBookings] = useState<BrokerBooking[]>([])
+  const [bookingStatus, setBookingStatus] = useState('')
+  const [bookingFrom, setBookingFrom] = useState('')
+  const [bookingTo, setBookingTo] = useState('')
+  const [bookingLoading, setBookingLoading] = useState(false)
+  const [bookingError, setBookingError] = useState('')
   const [reportFrom, setReportFrom] = useState('')
   const [reportTo, setReportTo] = useState('')
   const [reportLoading, setReportLoading] = useState(false)
@@ -31,17 +48,24 @@ export function BrokerDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const currentBookingFilters = (): BrokerBookingFilters => (
+    bookingStatus || bookingFrom || bookingTo
+      ? { status: bookingStatus || undefined, from: bookingFrom || undefined, to: bookingTo || undefined }
+      : {}
+  )
+
   const load = async () => {
     if (!session) return
     setLoading(true)
     setError('')
     setReportError('')
+    setBookingError('')
     try {
       const [nextSummary, nextReportSummary, nextHomes, nextBookings] = await Promise.all([
         getBrokerSummary(session.accessToken),
         getBrokerReportSummary(session.accessToken),
         getBrokerRentalHomes(session.accessToken),
-        getBrokerBookings(session.accessToken),
+        getBrokerBookings(session.accessToken, currentBookingFilters()),
       ])
       setSummary(nextSummary)
       setReportSummary(nextReportSummary)
@@ -55,9 +79,45 @@ export function BrokerDashboardPage() {
     }
   }
 
+  const loadBookings = async (filters = currentBookingFilters()) => {
+    if (!session) return
+    const validation = validateDateRange(filters.from ?? '', filters.to ?? '')
+    if (validation) {
+      setBookingError(validation)
+      return
+    }
+
+    setBookingLoading(true)
+    setBookingError('')
+    try {
+      setBookings(await getBrokerBookings(session.accessToken, filters))
+    } catch (cause) {
+      console.error('Broker bookings load failed', cause)
+      setBookingError(cause instanceof Error ? cause.message : 'Rezervasiyalar yüklənmədi.')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
+
+  const applyBookingFilters = () => {
+    void loadBookings(currentBookingFilters())
+  }
+
+  const clearBookingFilters = () => {
+    setBookingStatus('')
+    setBookingFrom('')
+    setBookingTo('')
+    void loadBookings({})
+  }
+
+  const applyStatusChip = (status: string) => {
+    setBookingStatus(status)
+    void loadBookings({ status: status || undefined, from: bookingFrom || undefined, to: bookingTo || undefined })
+  }
+
   const loadReportSummary = async (from = reportFrom, to = reportTo) => {
     if (!session) return
-    const validation = validateReportRange(from, to)
+    const validation = validateDateRange(from, to)
     if (validation) {
       setReportError(validation)
       return
@@ -90,6 +150,14 @@ export function BrokerDashboardPage() {
       reportSummary.totalExpenses === 0 &&
       reportSummary.estimatedProfit === 0
     : false
+
+  const bookingCounts = useMemo(() => ({
+    all: bookings.length,
+    pending: bookings.filter((booking) => booking.statusCode === 'pending').length,
+    waitingDeposit: bookings.filter((booking) => booking.statusCode === 'waiting_deposit').length,
+    confirmed: bookings.filter((booking) => booking.statusCode === 'confirmed').length,
+    inactive: bookings.filter((booking) => booking.statusCode === 'cancelled' || booking.statusCode === 'rejected').length,
+  }), [bookings])
 
   return (
     <AppLayout>
@@ -207,28 +275,73 @@ export function BrokerDashboardPage() {
 
               <div className="broker-section-heading">
                 <div>
-                  <h2>Son rezervasiyalar</h2>
-                  <p>Ən yeni sorğular əvvəl göstərilir.</p>
+                  <h2>Rezervasiyalar</h2>
+                  <p>Status və tarixə görə sorğuları daha rahat izləyin.</p>
                 </div>
               </div>
-              {bookings.length ? (
-                <div className="broker-bookings-list">
+
+              <div className="broker-booking-filter-panel">
+                <div className="broker-booking-filter-grid">
+                  <label>
+                    <span>Status</span>
+                    <select value={bookingStatus} onChange={(event) => setBookingStatus(event.target.value)}>
+                      {statusOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Başlanğıc tarix</span>
+                    <input type="date" value={bookingFrom} onChange={(event) => setBookingFrom(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Bitiş tarix</span>
+                    <input type="date" value={bookingTo} onChange={(event) => setBookingTo(event.target.value)} />
+                  </label>
+                  <button className="button button-primary" onClick={applyBookingFilters} disabled={bookingLoading}>
+                    {bookingLoading ? 'Yüklənir…' : 'Tətbiq et'}
+                  </button>
+                  <button className="button button-ghost" onClick={clearBookingFilters} disabled={bookingLoading}>Təmizlə</button>
+                </div>
+
+                <div className="broker-booking-chips" aria-label="Rezervasiya status xülasəsi">
+                  <button className={!bookingStatus ? 'active' : ''} onClick={() => applyStatusChip('')}>Hamısı <strong>{bookingCounts.all}</strong></button>
+                  <button className={bookingStatus === 'pending' ? 'active' : ''} onClick={() => applyStatusChip('pending')}>Yeni sorğu <strong>{bookingCounts.pending}</strong></button>
+                  <button className={bookingStatus === 'waiting_deposit' ? 'active' : ''} onClick={() => applyStatusChip('waiting_deposit')}>Beh gözləyir <strong>{bookingCounts.waitingDeposit}</strong></button>
+                  <button className={bookingStatus === 'confirmed' ? 'active' : ''} onClick={() => applyStatusChip('confirmed')}>Təsdiqlənib <strong>{bookingCounts.confirmed}</strong></button>
+                  <span>Ləğv/Rədd <strong>{bookingCounts.inactive}</strong></span>
+                </div>
+              </div>
+
+              {bookingError && (
+                <div className="broker-error" role="alert">
+                  <span>{bookingError}</span>
+                  <button className="button button-ghost" onClick={applyBookingFilters} disabled={bookingLoading}>Yenidən yoxla</button>
+                </div>
+              )}
+
+              {bookingLoading ? (
+                <div className="broker-loading">Rezervasiyalar yüklənir…</div>
+              ) : bookings.length ? (
+                <div className="broker-bookings-list broker-booking-cards">
                   {bookings.map((booking) => (
                     <Link to={`/broker/bookings/${booking.bookingId}`} key={booking.bookingId}>
                       <div>
                         <span>#{booking.bookingId} · {booking.rentalHomeTitle}</span>
                         <strong>{booking.customerName}</strong>
-                        <small>{booking.firstDate ? date.format(new Date(`${booking.firstDate}T00:00:00`)) : 'Tarix yoxdur'} · {booking.datesCount} gecə</small>
+                        <small><Phone size={13} /> {booking.customerPhone || 'Telefon yoxdur'}</small>
                       </div>
                       <div>
-                        <em className={`broker-status status-${booking.statusCode}`}>{booking.statusName}</em>
+                        <small><CalendarDays size={13} /> {formatBookingDates(booking)}</small>
+                        <small><UsersRound size={13} /> {booking.datesCount} gecə</small>
+                      </div>
+                      <div>
+                        <em className={`broker-status status-${booking.statusCode}`}>{statusLabel(booking.statusCode, booking.statusName)}</em>
                         <strong>{money.format(booking.totalAmount)}</strong>
                       </div>
                     </Link>
                   ))}
                 </div>
               ) : (
-                <EmptyState title="Rezervasiya yoxdur" description="Yeni sorğular burada görünəcək." />
+                <EmptyState title="Bu filterlərə uyğun rezervasiya tapılmadı." description="Filterləri dəyişib yenidən yoxlayın." />
               )}
             </>
           )}
@@ -238,8 +351,19 @@ export function BrokerDashboardPage() {
   )
 }
 
-function validateReportRange(from: string, to: string) {
-  if ((from && !to) || (!from && to)) return 'Tarix aralığı üçün həm başlanğıc, həm də bitiş tarixi seçilməlidir.'
+function validateDateRange(from: string, to: string) {
+  if ((from && !to) || (!from && to)) return 'Tarix filteri üçün həm başlanğıc, həm də bitiş tarixi seçilməlidir.'
   if (from && to && from > to) return 'Başlanğıc tarixi bitiş tarixindən sonra ola bilməz.'
   return ''
+}
+
+function statusLabel(statusCode: string, fallback: string) {
+  return statusOptions.find((option) => option.value === statusCode)?.label ?? fallback
+}
+
+function formatBookingDates(booking: BrokerBooking) {
+  if (!booking.firstDate) return 'Tarix yoxdur'
+  const first = date.format(new Date(`${booking.firstDate}T00:00:00`))
+  if (!booking.lastDate || booking.lastDate === booking.firstDate) return first
+  return `${first} — ${date.format(new Date(`${booking.lastDate}T00:00:00`))}`
 }
