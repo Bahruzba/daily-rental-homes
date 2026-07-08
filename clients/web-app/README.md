@@ -124,7 +124,19 @@ Live rejimdə istifadə olunan endpoint-lər:
 - `POST /api/broker/bookings/{bookingId}/expenses`
 - `DELETE /api/broker/bookings/{bookingId}/expenses/{expenseId}`
 
-Mock rejimdə xərclər lokal demo state/localStorage ilə simulyasiya olunur. Report dashboard və ümumi mənfəət hesabatları bu PR-a daxil deyil; ayrıca mərhələdə əlavə olunmalıdır.
+Mock rejimdə xərclər lokal demo state/localStorage ilə simulyasiya olunur. Detallı report dashboard, cədvəl və chart-lar ayrıca mərhələdə əlavə olunmalıdır.
+
+## Broker hesabat xülasəsi
+
+Broker `/broker` panelində “Hesabat xülasəsi” bölməsi ümumi bron məbləği, ümumi xərclər, təxmini mənfəət, bron sayı, gəlirə daxil bronlar, təmizlik xərci, ev sahibinə ödəniş və digər xərcləri kart formatında göstərir.
+
+Live rejimdə istifadə olunan endpoint:
+
+- `GET /api/broker/reports/summary`
+
+Tarix filteri `from` və `to` query parametrlərini dəstəkləyir. Hər iki tarix boş olduqda bütün xülasə yüklənir. Yalnız bir tarix seçilərsə və ya başlanğıc tarixi bitiş tarixindən sonra olarsa, frontend API çağırmadan oxunaqlı Azərbaycan dilində xəta göstərir. “Təmizlə” düyməsi filterləri sıfırlayır və bütün xülasəni yenidən yükləyir.
+
+Mock rejimdə dashboard demo rezervasiya və xərc məlumatları əsasında hesabat xülasəsini lokal hesablayır. Bu mərhələ yalnız summary kartlarını əhatə edir; detallı report cədvəli, chart-lar və export funksiyaları hələ yoxdur.
 
 ## Auth saxlanması
 
