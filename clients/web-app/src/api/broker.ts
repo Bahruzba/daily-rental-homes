@@ -131,6 +131,23 @@ export type RequestDepositPayload = {
   note?: string
 }
 
+export type BrokerBookingExpense = {
+  id: number
+  bookingId: number
+  typeCode: string
+  title: string
+  amount: number
+  note?: string | null
+  createdAt: string
+}
+
+export type BrokerBookingExpensePayload = {
+  typeCode: string
+  title: string
+  amount: number
+  note?: string
+}
+
 export class BrokerRequestError extends Error {
   constructor(message: string, readonly technicalCause?: unknown) {
     super(message)
@@ -149,6 +166,7 @@ let mockBookings: BrokerBooking[] = [
 ]
 
 const mockDepositStorageKey = 'daily-homes-mock-deposits'
+const mockExpenseStorageKey = 'daily-homes-mock-expenses'
 const defaultMockDeposits: Record<number, DepositInfo | undefined> = {
   1002: { id: 5002, amount: 75, statusCode: 'requested', deadlineAt: '2026-07-10T18:00:00Z', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
 }
@@ -160,6 +178,23 @@ function readMockDeposits() {
 
 export const mockDeposits: Record<number, DepositInfo | undefined> = readMockDeposits()
 export function persistMockDeposits() { window.localStorage.setItem(mockDepositStorageKey, JSON.stringify(mockDeposits)) }
+
+function defaultMockExpenses(): Record<number, BrokerBookingExpense[]> {
+  return {
+    1001: [
+      { id: 8001, bookingId: 1001, typeCode: 'cleaning', title: 'Təmizlik', amount: 40, note: 'Çıxışdan sonra təmizlik', createdAt: '2026-07-02T12:00:00Z' },
+      { id: 8002, bookingId: 1001, typeCode: 'owner_payout', title: 'Ev sahibinə ödəniş', amount: 300, note: null, createdAt: '2026-07-02T12:10:00Z' },
+    ],
+  }
+}
+
+function readMockExpenses() {
+  try { return { ...defaultMockExpenses(), ...JSON.parse(window.localStorage.getItem(mockExpenseStorageKey) ?? '{}') } }
+  catch { return defaultMockExpenses() }
+}
+
+const mockExpenses: Record<number, BrokerBookingExpense[]> = readMockExpenses()
+function persistMockExpenses() { window.localStorage.setItem(mockExpenseStorageKey, JSON.stringify(mockExpenses)) }
 
 export function getMockBrokerBookings() { return mockBookings }
 
@@ -420,4 +455,51 @@ export function rejectBrokerBooking(id: number, token: string, note?: string) {
 
 export function cancelBrokerBooking(id: number, token: string, note?: string) {
   return runBrokerBookingAction(id, 'cancel', token, note)
+}
+
+export async function getBrokerBookingExpenses(bookingId: number, token: string): Promise<BrokerBookingExpense[]> {
+  if (!useLiveApi) return [...(mockExpenses[bookingId] ?? [])].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+  return request(`/api/broker/bookings/${bookingId}/expenses`, token)
+}
+
+export async function createBrokerBookingExpense(bookingId: number, payload: BrokerBookingExpensePayload, token: string): Promise<BrokerBookingExpense> {
+  if (!useLiveApi) {
+    const booking = mockBookings.find((item) => item.bookingId === bookingId)
+    if (!booking) throw new BrokerRequestError('Rezervasiya tapılmadı.')
+    const expense: BrokerBookingExpense = {
+      id: Date.now(),
+      bookingId,
+      typeCode: payload.typeCode,
+      title: payload.title,
+      amount: payload.amount,
+      note: payload.note || null,
+      createdAt: new Date().toISOString(),
+    }
+    mockExpenses[bookingId] = [expense, ...(mockExpenses[bookingId] ?? [])]
+    persistMockExpenses()
+    return expense
+  }
+  return request(`/api/broker/bookings/${bookingId}/expenses`, token, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function updateBrokerBookingExpense(bookingId: number, expenseId: number, payload: BrokerBookingExpensePayload, token: string): Promise<BrokerBookingExpense> {
+  if (!useLiveApi) {
+    const expenses = mockExpenses[bookingId] ?? []
+    const index = expenses.findIndex((item) => item.id === expenseId)
+    if (index < 0) throw new BrokerRequestError('Xərc tapılmadı.')
+    expenses[index] = { ...expenses[index], ...payload, note: payload.note || null }
+    mockExpenses[bookingId] = [...expenses]
+    persistMockExpenses()
+    return expenses[index]
+  }
+  return request(`/api/broker/bookings/${bookingId}/expenses/${expenseId}`, token, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export async function deleteBrokerBookingExpense(bookingId: number, expenseId: number, token: string) {
+  if (!useLiveApi) {
+    mockExpenses[bookingId] = (mockExpenses[bookingId] ?? []).filter((item) => item.id !== expenseId)
+    persistMockExpenses()
+    return { id: expenseId }
+  }
+  return request<{ id: number }>(`/api/broker/bookings/${bookingId}/expenses/${expenseId}`, token, { method: 'DELETE' })
 }

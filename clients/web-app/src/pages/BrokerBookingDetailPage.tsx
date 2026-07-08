@@ -1,16 +1,20 @@
-import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Phone, Upload, UserRound, XCircle } from 'lucide-react'
-import { type FormEvent, useEffect, useState } from 'react'
+import { ArrowLeft, CalendarDays, CheckCircle2, CreditCard, Phone, PlusCircle, ReceiptText, Trash2, Upload, UserRound, XCircle } from 'lucide-react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   acceptBrokerBooking,
   approveBrokerDeposit,
   cancelBrokerBooking,
+  createBrokerBookingExpense,
+  deleteBrokerBookingExpense,
   getBrokerBooking,
+  getBrokerBookingExpenses,
   rejectBrokerBooking,
   rejectBrokerDeposit,
   requestBrokerDeposit,
   resolveApiAssetUrl,
   type BrokerBookingDetail,
+  type BrokerBookingExpense,
 } from '../api/broker'
 import { useAuth } from '../auth/AuthContext'
 import { AppLayout } from '../components/AppLayout'
@@ -32,6 +36,14 @@ const depositLabels: Record<string, string> = {
   cancelled: 'Ləğv edilib',
 }
 
+const expenseLabels: Record<string, string> = {
+  cleaning: 'Təmizlik',
+  owner_payout: 'Ev sahibinə ödəniş',
+  utility: 'Kommunal',
+  repair: 'Təmir',
+  other: 'Digər',
+}
+
 const actions: Record<string, Array<{ action: 'accept' | 'reject' | 'cancel'; label: string; tone: 'primary' | 'ghost' }>> = {
   pending: [
     { action: 'accept', label: 'Təsdiqlə', tone: 'primary' },
@@ -47,9 +59,13 @@ export function BrokerBookingDetailPage() {
   const { session } = useAuth()
   const bookingId = Number(id)
   const [booking, setBooking] = useState<BrokerBookingDetail>()
+  const [expenses, setExpenses] = useState<BrokerBookingExpense[]>([])
   const [loading, setLoading] = useState(true)
+  const [expensesLoading, setExpensesLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [expenseSaving, setExpenseSaving] = useState(false)
   const [error, setError] = useState('')
+  const [expenseError, setExpenseError] = useState('')
   const [success, setSuccess] = useState('')
   const [amount, setAmount] = useState('')
   const [deadline, setDeadline] = useState(tomorrow)
@@ -57,6 +73,27 @@ export function BrokerBookingDetailPage() {
   const [pan, setPan] = useState('**** **** **** ')
   const [bank, setBank] = useState('')
   const [depositNote, setDepositNote] = useState('')
+  const [expenseType, setExpenseType] = useState('cleaning')
+  const [expenseTitle, setExpenseTitle] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseNote, setExpenseNote] = useState('')
+
+  const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses])
+  const estimatedProfit = (booking?.totalAmount ?? 0) - totalExpenses
+
+  const loadExpenses = async () => {
+    if (!session || !Number.isInteger(bookingId) || bookingId <= 0) return
+    setExpensesLoading(true)
+    setExpenseError('')
+    try {
+      setExpenses(await getBrokerBookingExpenses(bookingId, session.accessToken))
+    } catch (cause) {
+      console.error('Broker booking expenses load failed', cause)
+      setExpenseError(cause instanceof Error ? cause.message : 'Xərclər yüklənmədi.')
+    } finally {
+      setExpensesLoading(false)
+    }
+  }
 
   const load = async () => {
     if (!session) return
@@ -69,7 +106,12 @@ export function BrokerBookingDetailPage() {
     setLoading(true)
     setError('')
     try {
-      setBooking(await getBrokerBooking(bookingId, session.accessToken))
+      const [bookingData, expenseData] = await Promise.all([
+        getBrokerBooking(bookingId, session.accessToken),
+        getBrokerBookingExpenses(bookingId, session.accessToken),
+      ])
+      setBooking(bookingData)
+      setExpenses(expenseData)
     } catch (cause) {
       console.error('Broker booking detail load failed', cause)
       setError(cause instanceof Error ? cause.message : 'Rezervasiya yüklənmədi.')
@@ -132,6 +174,54 @@ export function BrokerBookingDetailPage() {
         ),
       'Beh tələbi yaradıldı, müştəri bildirişi və reminder növbəyə alındı.',
     )
+  }
+
+  const submitExpense = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!session) return
+    const amountValue = Number(expenseAmount)
+    if (!expenseType.trim()) { setExpenseError('Xərc növü seçilməlidir.'); return }
+    if (!expenseTitle.trim()) { setExpenseError('Xərc başlığı yazılmalıdır.'); return }
+    if (!Number.isFinite(amountValue) || amountValue <= 0) { setExpenseError('Məbləğ 0-dan böyük olmalıdır.'); return }
+
+    setExpenseSaving(true)
+    setExpenseError('')
+    setSuccess('')
+    try {
+      await createBrokerBookingExpense(bookingId, {
+        typeCode: expenseType,
+        title: expenseTitle.trim(),
+        amount: amountValue,
+        note: expenseNote.trim() || undefined,
+      }, session.accessToken)
+      setSuccess('Xərc əlavə edildi.')
+      setExpenseTitle('')
+      setExpenseAmount('')
+      setExpenseNote('')
+      await loadExpenses()
+    } catch (cause) {
+      console.error('Broker expense create failed', cause)
+      setExpenseError(cause instanceof Error ? cause.message : 'Xərc əlavə edilmədi.')
+    } finally {
+      setExpenseSaving(false)
+    }
+  }
+
+  const deleteExpense = async (expenseId: number) => {
+    if (!session) return
+    setExpenseSaving(true)
+    setExpenseError('')
+    setSuccess('')
+    try {
+      await deleteBrokerBookingExpense(bookingId, expenseId, session.accessToken)
+      setSuccess('Xərc silindi.')
+      await loadExpenses()
+    } catch (cause) {
+      console.error('Broker expense delete failed', cause)
+      setExpenseError(cause instanceof Error ? cause.message : 'Xərc silinmədi.')
+    } finally {
+      setExpenseSaving(false)
+    }
   }
 
   return (
@@ -218,6 +308,55 @@ export function BrokerBookingDetailPage() {
                     )}
                   </article>
 
+                  <article className="expense-section">
+                    <div className="expense-heading">
+                      <div>
+                        <h2>Xərclər</h2>
+                        <p>Bu rezervasiya üzrə broker daxili xərclərini qeyd edin.</p>
+                      </div>
+                      <ReceiptText />
+                    </div>
+
+                    <div className="expense-summary-grid">
+                      <div><span>Rezervasiya məbləği</span><strong>{money.format(booking.totalAmount)}</strong></div>
+                      <div><span>Cəmi xərclər</span><strong>{money.format(totalExpenses)}</strong></div>
+                      <div><span>Təxmini mənfəət</span><strong>{money.format(estimatedProfit)}</strong></div>
+                    </div>
+
+                    {expenseError && <div className="broker-error" role="alert">{expenseError}</div>}
+
+                    <form className="expense-form input-grid" onSubmit={submitExpense}>
+                      <label><span>Xərc növü</span><select value={expenseType} onChange={(event) => setExpenseType(event.target.value)}>{Object.entries(expenseLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+                      <label><span>Başlıq</span><input value={expenseTitle} maxLength={150} onChange={(event) => setExpenseTitle(event.target.value)} placeholder="Məs: Təmizlik" /></label>
+                      <label><span>Məbləğ</span><input type="number" min="0.01" step="0.01" value={expenseAmount} onChange={(event) => setExpenseAmount(event.target.value)} placeholder="0.00" /></label>
+                      <label className="full"><span>Qeyd</span><textarea value={expenseNote} maxLength={1000} onChange={(event) => setExpenseNote(event.target.value)} placeholder="İstəyə bağlı qeyd" /></label>
+                      <button className="button button-primary" disabled={expenseSaving}><PlusCircle size={16} /> Xərc əlavə et</button>
+                    </form>
+
+                    {expensesLoading ? (
+                      <div className="broker-loading">Xərclər yüklənir…</div>
+                    ) : expenses.length ? (
+                      <div className="expense-list">
+                        {expenses.map((expense) => (
+                          <div className="expense-row" key={expense.id}>
+                            <div>
+                              <em>{expenseLabels[expense.typeCode] ?? expense.typeCode}</em>
+                              <strong>{expense.title}</strong>
+                              {expense.note && <p>{expense.note}</p>}
+                              <small>{dateTime.format(new Date(expense.createdAt))}</small>
+                            </div>
+                            <div>
+                              <strong>{money.format(expense.amount)}</strong>
+                              <button className="icon-button" disabled={expenseSaving} onClick={() => void deleteExpense(expense.id)} aria-label="Xərci sil"><Trash2 size={16} /></button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="broker-note">Bu rezervasiya üçün xərc əlavə edilməyib.</p>
+                    )}
+                  </article>
+
                   <article>
                     <h2>Müştəri qeydi</h2>
                     <p className="broker-note">{booking.note || 'Müştəri qeyd əlavə etməyib.'}</p>
@@ -229,6 +368,14 @@ export function BrokerBookingDetailPage() {
                   <strong>{money.format(booking.dailyPrice)}</strong>
                   <span>Yaradılma vaxtı</span>
                   <strong>{dateTime.format(new Date(booking.createdAt))}</strong>
+                  <hr />
+                  <h2>Maliyyə xülasəsi</h2>
+                  <span>Rezervasiya məbləği</span>
+                  <strong>{money.format(booking.totalAmount)}</strong>
+                  <span>Cəmi xərclər</span>
+                  <strong>{money.format(totalExpenses)}</strong>
+                  <span>Təxmini mənfəət</span>
+                  <strong>{money.format(estimatedProfit)}</strong>
                   <hr />
                   <h2>Status əməliyyatları</h2>
                   {actions[booking.status.code]?.length ? (
