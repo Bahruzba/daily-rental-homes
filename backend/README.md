@@ -318,6 +318,8 @@ Optional body:
 
 The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Messages are never deleted by delivery processing. This is still a fake-provider foundation; real WhatsApp/SMS integration, retries, provider credentials, templates, and production throttling are intentionally outside this scope.
 
+Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
+
 Production still requires a real WhatsApp/SMS provider worker, retry/backoff and idempotency strategy, delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
 
 ### Dictionaries and related data

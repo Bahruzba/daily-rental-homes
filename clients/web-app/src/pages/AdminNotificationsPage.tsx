@@ -1,7 +1,7 @@
 import { ArrowLeft, Bell, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getAdminNotifications, type AdminNotification } from '../api/admin'
+import { getAdminNotifications, processPendingNotifications, type AdminNotification } from '../api/admin'
 import { useAuth } from '../auth/AuthContext'
 import { AppLayout } from '../components/AppLayout'
 import { EmptyState } from '../components/EmptyState'
@@ -15,7 +15,7 @@ const dateTime = new Intl.DateTimeFormat('az-AZ', {
 })
 
 const statusOptions = ['pending', 'sent', 'failed', 'cancelled', 'skipped']
-const typeOptions = ['booking_created', 'deposit_requested', 'deposit_approved', 'deposit_rejected', 'booking_status_changed', 'deposit_deadline_reminder']
+const typeOptions = ['booking_created', 'booking_cancellation_requested', 'deposit_requested', 'deposit_approved', 'deposit_rejected', 'booking_status_changed', 'deposit_deadline_reminder']
 
 export function AdminNotificationsPage() {
   const { session } = useAuth()
@@ -24,7 +24,10 @@ export function AdminNotificationsPage() {
   const [type, setType] = useState('')
   const [bookingId, setBookingId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false)
+  const [batchSize, setBatchSize] = useState('20')
   const [error, setError] = useState('')
+  const [processMessage, setProcessMessage] = useState('')
 
   const load = async (next = { status, type, bookingId }) => {
     if (!session) return
@@ -51,6 +54,29 @@ export function AdminNotificationsPage() {
     setType('')
     setBookingId('')
     void load({ status: '', type: '', bookingId: '' })
+  }
+
+  const processPending = async () => {
+    if (!session) return
+    const value = Number(batchSize)
+    if (!Number.isInteger(value) || value < 1 || value > 100) {
+      setError('Batch sayı 1 və 100 arasında olmalıdır.')
+      return
+    }
+
+    setProcessing(true)
+    setError('')
+    setProcessMessage('')
+    try {
+      const result = await processPendingNotifications(session.accessToken, value)
+      setProcessMessage(`Emal edildi: ${result.processed}, göndərildi: ${result.sent}, uğursuz: ${result.failed}`)
+      await load()
+    } catch (cause) {
+      console.error('Admin notification processing failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Pending bildirişlər emal edilmədi.')
+    } finally {
+      setProcessing(false)
+    }
   }
 
   useEffect(() => { void load({ status: '', type: '', bookingId: '' }) }, [session?.accessToken])
@@ -80,6 +106,22 @@ export function AdminNotificationsPage() {
             <article><span className="status-dot sent" /><span>Göndərilib</span><strong>{counts.sent}</strong></article>
             <article><span className="status-dot failed" /><span>Uğursuz</span><strong>{counts.failed}</strong></article>
           </div>
+
+          <div className="admin-delivery-panel">
+            <div>
+              <h2>Bildirişləri göndər</h2>
+              <p>Vaxtı çatmış pending bildirişləri fake provider ilə emal edir.</p>
+            </div>
+            <label>
+              <span>Batch sayı</span>
+              <input type="number" min="1" max="100" value={batchSize} onChange={(event) => setBatchSize(event.target.value)} />
+            </label>
+            <button className="button button-primary" onClick={() => void processPending()} disabled={processing || loading}>
+              <RefreshCw size={16} /> {processing ? 'Emal edilir…' : 'Pending bildirişləri emal et'}
+            </button>
+          </div>
+
+          {processMessage && <div className="account-success admin-process-success" role="status">{processMessage}</div>}
 
           <div className="admin-notification-filters">
             <label>
@@ -139,7 +181,9 @@ export function AdminNotificationsPage() {
                   </div>
                   <div className="admin-notification-foot">
                     {item.scheduledAt && <span>Plan: {formatDateTime(item.scheduledAt)}</span>}
-                    {item.sentAt && <span>Göndərildi: {formatDateTime(item.sentAt)}</span>}
+                    {item.providerMessageId && <span>Provider ID: {item.providerMessageId}</span>}
+                    {item.errorMessage && <span className="notification-error-text">Xəta: {item.errorMessage}</span>}
+                    {item.sentAt && <span>Göndərilmə vaxtı: {formatDateTime(item.sentAt)}</span>}
                     {item.relatedBookingId && <span>Booking #{item.relatedBookingId}</span>}
                     {item.relatedDepositId && <span>Deposit #{item.relatedDepositId}</span>}
                   </div>
@@ -183,6 +227,7 @@ function channelLabel(value: string) {
 function typeLabel(value: string) {
   const labels: Record<string, string> = {
     booking_created: 'Yeni rezervasiya',
+    booking_cancellation_requested: 'Ləğv sorğusu',
     deposit_requested: 'Beh istəyi',
     deposit_approved: 'Beh təsdiqi',
     deposit_rejected: 'Beh rəddi',

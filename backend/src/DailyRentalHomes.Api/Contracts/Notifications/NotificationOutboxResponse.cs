@@ -12,6 +12,8 @@ public sealed record NotificationOutboxResponse(
     string Message,
     DateTime? ScheduledAt,
     DateTime? SentAt,
+    string? ProviderMessageId,
+    string? ErrorMessage,
     long? RelatedBookingId,
     long? RelatedDepositId,
     DateTime CreatedAt);
