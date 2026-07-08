@@ -24,16 +24,49 @@
 .session-banner span { color: var(--muted); font-size: 11px; }
 .session-banner button { margin-left: auto; }
 .role-dashboard-grid { margin-top: 20px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-.role-dashboard-grid article { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
-.role-dashboard-grid article > svg { width: 28px; height: 28px; color: var(--primary); }
+.role-dashboard-grid article, .role-dashboard-card-link { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fff; transition: .2s; }
+.role-dashboard-card-link:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.role-dashboard-grid article > svg, .role-dashboard-card-link > svg { width: 28px; height: 28px; color: var(--primary); }
 .role-dashboard-grid h2 { margin: 25px 0 8px; font-size: 18px; }
 .role-dashboard-grid p { min-height: 60px; margin: 0 0 17px; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.role-dashboard-grid article > span { color: var(--primary); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.role-dashboard-grid article > span, .role-dashboard-card-link > span { color: var(--primary); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.admin-notifications-page { min-height: 70vh; padding: 55px 0 100px; }
+.admin-notification-summary { margin-top: 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; }
+.admin-notification-summary article { padding: 18px; border: 1px solid var(--line); border-radius: 15px; display: grid; gap: 6px; background: #fff; }
+.admin-notification-summary svg { width: 24px; color: var(--primary); }
+.admin-notification-summary span { color: var(--muted); font-size: 11px; }
+.admin-notification-summary strong { font-size: 24px; }
+.status-dot { width: 24px; height: 24px; border-radius: 999px; display: inline-block; }
+.status-dot.pending { background: #fff2d4; }
+.status-dot.sent { background: #e1f5e9; }
+.status-dot.failed { background: #fde8e6; }
+.admin-notification-filters { margin-top: 18px; padding: 17px; border: 1px solid var(--line); border-radius: 16px; display: grid; grid-template-columns: 1fr 1.2fr 1fr auto auto; gap: 12px; align-items: end; background: #fff; }
+.admin-notification-filters label { display: grid; gap: 7px; }
+.admin-notification-filters label span { color: var(--muted); font-size: 11px; }
+.admin-notification-filters input, .admin-notification-filters select { height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); }
+.admin-notification-error { margin-top: 16px; }
+.admin-notification-list { margin-top: 18px; display: grid; gap: 12px; }
+.admin-notification-list article { padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.admin-notification-topline, .admin-notification-body, .admin-notification-foot { display: flex; justify-content: space-between; gap: 18px; }
+.admin-notification-topline { align-items: center; margin-bottom: 15px; }
+.admin-notification-topline > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-notification-topline small, .admin-notification-topline time, .admin-notification-body span, .admin-notification-meta span, .admin-notification-meta small, .admin-notification-foot { color: var(--muted); font-size: 11px; }
+.notification-status, .notification-channel { padding: 6px 9px; border-radius: 999px; font-size: 10px; font-weight: 850; }
+.notification-status.status-pending { color: #8a5d08; background: #fff2d4; }
+.notification-status.status-sent { color: #187349; background: #e1f5e9; }
+.notification-status.status-failed { color: #8a322b; background: #fde8e6; }
+.notification-status.status-cancelled, .notification-status.status-skipped { color: #5d6571; background: #edf0ed; }
+.notification-channel { color: var(--primary); background: var(--primary-soft); }
+.admin-notification-body h2 { margin: 5px 0 7px; font-size: 17px; }
+.admin-notification-body p { max-width: 720px; margin: 0; color: var(--muted); line-height: 1.55; }
+.admin-notification-meta { min-width: 190px; padding: 12px; border-radius: 12px; display: grid; gap: 4px; background: #f8faf8; }
+.admin-notification-meta strong { font-size: 13px; }
+.admin-notification-foot { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--line); justify-content: flex-start; flex-wrap: wrap; }
 .unauthorized-page { min-height: 65vh; padding-top: 100px; text-align: center; }
 .unauthorized-page > svg { width: 54px; height: 54px; margin: 0 auto 20px; color: var(--primary); }
 .unauthorized-page h1 { margin: 12px 0; font: 500 43px Georgia, serif; }
 .unauthorized-page p { color: var(--muted); }
 .unauthorized-page > div { margin-top: 24px; display: flex; justify-content: center; gap: 9px; }
-@media (max-width: 1050px) { .auth-layout { gap: 45px; } .role-dashboard-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 820px) { .auth-layout { grid-template-columns: 1fr; gap: 35px; } .auth-intro { text-align: center; } .auth-intro p { margin-inline: auto; } .auth-intro > span:last-child { justify-content: center; } }
-@media (max-width: 600px) { .auth-page { padding: 45px 0 75px; } .auth-intro h1 { font-size: 42px; } .auth-card { padding: 23px; } .role-dashboard-heading { align-items: start; flex-direction: column; } .role-dashboard-heading h1, .unauthorized-page h1 { font-size: 35px; } .session-banner { align-items: flex-start; flex-wrap: wrap; } .session-banner button { width: 100%; margin-left: 0; } .role-dashboard-grid { grid-template-columns: 1fr; } .role-dashboard-grid p { min-height: 0; } .unauthorized-page > div { flex-direction: column; } }
+@media (max-width: 1050px) { .auth-layout { gap: 45px; } .role-dashboard-grid, .admin-notification-summary { grid-template-columns: repeat(2, 1fr); } .admin-notification-filters { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 820px) { .auth-layout { grid-template-columns: 1fr; gap: 35px; } .auth-intro { text-align: center; } .auth-intro p { margin-inline: auto; } .auth-intro > span:last-child { justify-content: center; } .admin-notification-body { flex-direction: column; } .admin-notification-meta { min-width: 0; } }
+@media (max-width: 600px) { .auth-page { padding: 45px 0 75px; } .auth-intro h1 { font-size: 42px; } .auth-card { padding: 23px; } .role-dashboard-heading { align-items: start; flex-direction: column; } .role-dashboard-heading h1, .unauthorized-page h1 { font-size: 35px; } .session-banner { align-items: flex-start; flex-wrap: wrap; } .session-banner button { width: 100%; margin-left: 0; } .role-dashboard-grid, .admin-notification-summary, .admin-notification-filters { grid-template-columns: 1fr; } .role-dashboard-grid p { min-height: 0; } .unauthorized-page > div { flex-direction: column; } .admin-notification-filters .button { width: 100%; } .admin-notification-topline { align-items: flex-start; flex-direction: column; } }

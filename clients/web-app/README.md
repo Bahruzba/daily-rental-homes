@@ -138,6 +138,26 @@ Tarix filteri `from` və `to` query parametrlərini dəstəkləyir. Hər iki tar
 
 Mock rejimdə dashboard demo rezervasiya və xərc məlumatları əsasında hesabat xülasəsini lokal hesablayır. Bu mərhələ yalnız summary kartlarını əhatə edir; detallı report cədvəli, chart-lar və export funksiyaları hələ yoxdur.
 
+## Admin notification outbox
+
+Admin `/admin` panelində “Bildirişlər” kartı `/admin/notifications` səhifəsini açır. Bu ekran WhatsApp/SMS üçün növbəyə alınmış notification outbox mesajlarını read-only siyahı kimi göstərir.
+
+Live rejimdə istifadə olunan endpoint:
+
+- `GET /api/admin/notifications`
+
+Filterlər:
+
+- `status`
+- `type`
+- `bookingId`
+
+Boş filterlər endpoint-i query param olmadan çağırır. `bookingId` yalnız rəqəm olmalıdır; səhv dəyər yazılarsa frontend API çağırmadan Azərbaycan dilində validation mesajı göstərir. “Təmizlə” düyməsi filterləri sıfırlayır və bütün bildirişləri yenidən yükləyir.
+
+Mock rejimdə Admin UI backend olmadan demo outbox data göstərir: pending `booking_created`, pending `deposit_requested`, sent `deposit_approved`, failed `booking_status_changed`. Mock filter status, type və bookingId üzrə işləyir.
+
+Limit: ekran read-only-dir. Real WhatsApp/SMS provider, retry/send worker və manual resend əməliyyatı bu mərhələyə daxil deyil.
+
 ## Auth saxlanması
 
 JWT və istifadəçi məlumatı MVP üçün `localStorage`-da saxlanılır. Bu, yalnız ilkin MVP yanaşmasıdır; production təhlükəsizliyi üçün daha sonra HttpOnly cookie və uyğun sessiya strategiyası nəzərdən keçirilməlidir.

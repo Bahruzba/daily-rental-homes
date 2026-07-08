@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthContext'
 import { dashboardPath, type AuthRole } from '../auth/types'
 import { AppLayout } from '../components/AppLayout'
 
-type DashboardItem = { title: string; description: string; icon: LucideIcon }
+type DashboardItem = { title: string; description: string; icon: LucideIcon; to?: string }
 
 type Props = {
   role: AuthRole
@@ -32,7 +32,12 @@ export function RoleDashboardPage({ role, eyebrow, title, description, items }: 
             <div><strong>{session.user.fullName}</strong><span>{session.user.phone} · {session.user.role}</span></div>
             <button className="button button-ghost" onClick={logout}><LogOut size={17} /> Çıxış</button>
           </div>
-          <div className="role-dashboard-grid">{items.map(({ title: itemTitle, description: itemDescription, icon: Icon }) => <article key={itemTitle}><Icon /><h2>{itemTitle}</h2><p>{itemDescription}</p><span>MVP placeholder</span></article>)}</div>
+          <div className="role-dashboard-grid">{items.map(({ title: itemTitle, description: itemDescription, icon: Icon, to }) => {
+            const content = <><Icon /><h2>{itemTitle}</h2><p>{itemDescription}</p><span>{to ? 'Bax' : 'MVP placeholder'}</span></>
+            return to
+              ? <Link className="role-dashboard-card-link" to={to} key={itemTitle}>{content}</Link>
+              : <article key={itemTitle}>{content}</article>
+          })}</div>
         </div>
       </section>
     </AppLayout>

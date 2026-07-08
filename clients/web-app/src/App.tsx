@@ -1,8 +1,9 @@
-import { ClipboardList, Home, Settings, Users } from 'lucide-react'
+import { Bell, ClipboardList, Home, Settings, Users } from 'lucide-react'
 import { Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './auth/ProtectedRoute'
 import { AccountBookingDetailPage } from './pages/AccountBookingDetailPage'
 import { AccountDashboardPage } from './pages/AccountDashboardPage'
+import { AdminNotificationsPage } from './pages/AdminNotificationsPage'
 import { BookingPage } from './pages/BookingPage'
 import { BrokerBookingDetailPage } from './pages/BrokerBookingDetailPage'
 import { BrokerDashboardPage } from './pages/BrokerDashboardPage'
@@ -18,6 +19,7 @@ const adminItems = [
   { title: 'Evlər', description: 'Platformadakı ev elanları üçün idarəetmə sahəsi.', icon: Home },
   { title: 'Brokerlər', description: 'Broker hesabları və gələcək təsdiq axını.', icon: Users },
   { title: 'Rezervasiyalar', description: 'Bütün rezervasiya sorğularının xülasəsi.', icon: ClipboardList },
+  { title: 'Bildirişlər', description: 'WhatsApp/SMS outbox mesajlarını və statuslarını oxu.', icon: Bell, to: '/admin/notifications' },
   { title: 'Tənzimləmələr', description: 'Sistem parametrləri üçün ayrılmış sahə.', icon: Settings },
 ]
 
@@ -29,6 +31,7 @@ export default function App() {
     <Route path="/login" element={<LoginPage />} />
     <Route path="/unauthorized" element={<UnauthorizedPage />} />
     <Route path="/admin" element={<ProtectedRoute roles={['Admin']}><RoleDashboardPage role="Admin" eyebrow="ADMİN PANELİ" title="İdarəetmə xülasəsi" description="Platformanın əsas idarəetmə bölmələri." items={adminItems} /></ProtectedRoute>} />
+    <Route path="/admin/notifications" element={<ProtectedRoute roles={['Admin']}><AdminNotificationsPage /></ProtectedRoute>} />
     <Route path="/broker" element={<ProtectedRoute roles={['Broker']}><BrokerDashboardPage /></ProtectedRoute>} />
     <Route path="/broker/bookings/:id" element={<ProtectedRoute roles={['Broker']}><BrokerBookingDetailPage /></ProtectedRoute>} />
     <Route path="/broker/rental-homes/new" element={<ProtectedRoute roles={['Broker']}><BrokerRentalHomeManagePage /></ProtectedRoute>} />
