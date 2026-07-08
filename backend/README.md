@@ -216,6 +216,28 @@ Customer-visible status meanings:
 
 Development receipts are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. This local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
 
+### Broker booking expenses
+
+Broker/Admin JWT endpoints:
+
+- GET /api/broker/bookings/{bookingId}/expenses
+- POST /api/broker/bookings/{bookingId}/expenses
+- PUT /api/broker/bookings/{bookingId}/expenses/{expenseId}
+- DELETE /api/broker/bookings/{bookingId}/expenses/{expenseId}
+
+Broker users can manage expenses only for bookings linked to their own rental homes. Another broker receives 404, and soft-deleted bookings/homes are not manageable. Delete uses the existing soft-delete pattern.
+
+Expense fields:
+
+- `bookingId`
+- `typeCode` such as `cleaning`, `owner_payout`, `utility`, `repair`, or `other`
+- `title`
+- `amount`
+- optional `note`
+- audit and soft-delete fields from the shared BaseEntity pattern
+
+Validation requires booking, type, title, and amount greater than zero. The current scope is storage and broker CRUD only; report summary endpoints and frontend UI will come in later PRs.
+
 ### Deposits
 
 - GET /api/deposits

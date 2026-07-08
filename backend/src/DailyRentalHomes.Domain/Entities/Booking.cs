@@ -21,4 +21,5 @@ public sealed class Booking : BaseEntity
     public BookingDeposit? Deposit { get; set; }
     public ICollection<BookingDate> Dates { get; set; } = new List<BookingDate>();
     public ICollection<BookingStatusHistory> StatusHistory { get; set; } = new List<BookingStatusHistory>();
+    public ICollection<BookingExpense> Expenses { get; set; } = new List<BookingExpense>();
 }
