@@ -13,6 +13,7 @@ public interface IAppDbContext
     DbSet<Booking> Bookings { get; }
     DbSet<BookingDate> BookingDates { get; }
     DbSet<BookingDeposit> BookingDeposits { get; }
+    DbSet<BookingExpense> BookingExpenses { get; }
     DbSet<BookingStatus> BookingStatuses { get; }
     DbSet<PaymentCard> PaymentCards { get; }
     DbSet<OutboundMessage> OutboundMessages { get; }
