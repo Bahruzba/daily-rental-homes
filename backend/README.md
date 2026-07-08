@@ -292,6 +292,32 @@ The existing `outbound_messages` table is reused as the MVP notification outbox.
 
 When a deposit is requested, an immediate `deposit_requested` record is created. If the deadline is more than three hours away, `deposit_deadline_reminder` is scheduled two hours before it. If it is between 30 minutes and three hours away, the reminder is scheduled 30 minutes before it; closer deadlines skip the reminder.
 
+Notification delivery foundation uses `INotificationDeliveryProvider` and the development-safe `FakeNotificationDeliveryProvider`. The fake provider does not call external WhatsApp/SMS APIs. Normal pending messages are marked as `sent`, `sent_at` is set, and `provider_message_id` is stored as `fake-{outboxId}`. If title, text, recipient name, or recipient phone contains `FAIL_FAKE_PROVIDER`, the message is marked as `failed` and `error_message` is populated.
+
+The background worker is registered but disabled by default:
+
+```json
+"Notifications": {
+  "WorkerEnabled": false,
+  "PollSeconds": 30,
+  "BatchSize": 20
+}
+```
+
+When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past, processes a limited batch, and logs errors without crashing the API. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
+
+- POST /api/admin/notifications/process-pending
+
+Optional body:
+
+```json
+{
+  "batchSize": 20
+}
+```
+
+The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Messages are never deleted by delivery processing. This is still a fake-provider foundation; real WhatsApp/SMS integration, retries, provider credentials, templates, and production throttling are intentionally outside this scope.
+
 Production still requires a real WhatsApp/SMS provider worker, retry/backoff and idempotency strategy, delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
 
 ### Dictionaries and related data

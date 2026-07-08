@@ -99,7 +99,12 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 builder.Services.AddSingleton<AccessTokenBuilder>();
+builder.Services.AddOptions<NotificationWorkerOptions>()
+    .Bind(builder.Configuration.GetSection(NotificationWorkerOptions.SectionName));
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
+builder.Services.AddScoped<INotificationDeliveryProvider, FakeNotificationDeliveryProvider>();
+builder.Services.AddScoped<NotificationDeliveryService>();
+builder.Services.AddHostedService<NotificationDeliveryWorker>();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
