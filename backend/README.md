@@ -40,6 +40,64 @@ ASPNETCORE_ENVIRONMENT=Development dotnet run --urls http://127.0.0.1:5099
 
 The local API is available at `http://127.0.0.1:5099`. The included launch profile also selects Development and port `5099` for a plain `dotnet run` from the API project directory.
 
+## Configuration
+
+Important environment variables:
+
+- `ASPNETCORE_ENVIRONMENT` — use `Development` locally and `Production` for container/production runs.
+- `ASPNETCORE_URLS` — listening URL, for example `http://+:8080` in Docker.
+- `ConnectionStrings__DefaultConnection` — SQL Server connection string used by EF Core.
+- `Token__Issuer`
+- `Token__Audience`
+- `Token__Key` — must be at least 32 bytes and must be replaced with a secure secret outside local development.
+- `Token__Minutes`
+- `Notifications__WorkerEnabled` — defaults to `false`.
+- `Notifications__PollSeconds` — defaults to `30`.
+- `Notifications__BatchSize` — defaults to `20`.
+
+This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
+
+## Docker
+
+Build the backend image from the repository root:
+
+```bash
+docker build -f backend/Dockerfile -t daily-rental-homes-api .
+```
+
+Run the image manually:
+
+```bash
+docker run --rm -p 5099:8080 \
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  -e ASPNETCORE_URLS=http://+:8080 \
+  -e ConnectionStrings__DefaultConnection="Server=host.docker.internal;Database=DailyRentalHomes;User Id=sa;Password=Your_strong_password123;TrustServerCertificate=True" \
+  -e Token__Issuer=DailyRentalHomes \
+  -e Token__Audience=DailyRentalHomesClients \
+  -e Token__Key=CHANGE_ME_TO_A_SECURE_32_BYTE_MINIMUM_SECRET \
+  daily-rental-homes-api
+```
+
+Start the API with a local SQL Server container:
+
+```bash
+docker compose up --build
+```
+
+The compose file exposes:
+
+- API: `http://127.0.0.1:5099`
+- SQL Server: `127.0.0.1:1433`
+
+SQL Server data is persisted in the `sqlserver-data` Docker volume. Apply EF migrations before using a fresh database:
+
+```bash
+cd backend
+dotnet ef database update --project src/DailyRentalHomes.Infrastructure --startup-project src/DailyRentalHomes.Api
+```
+
+The compose API service runs with `ASPNETCORE_ENVIRONMENT=Production` so it does not execute the Development-only local seed before migrations exist. For local non-container development, continue to use the `dotnet run` Development command above.
+
 ## Database
 
 Connection string is in:
@@ -87,6 +145,10 @@ build.sh
 ### Health
 
 - GET /api/health
+- GET /health
+- GET /health/ready
+
+`/health` is a lightweight application liveness endpoint. `/health/ready` checks SQL Server connectivity and returns unhealthy if the configured database is unavailable. The older `/api/health` endpoint remains for backward compatibility and returns `ok`.
 
 ### Auth
 
