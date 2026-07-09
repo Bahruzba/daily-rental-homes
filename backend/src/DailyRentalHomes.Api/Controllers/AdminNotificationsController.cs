@@ -69,6 +69,8 @@ public sealed class AdminNotificationsController : ControllerBase
                 item.Text,
                 item.ScheduledAt,
                 item.SentAt,
+                item.ProviderMessageId,
+                item.ErrorMessage,
                 item.BookingId,
                 item.BookingDepositId,
                 item.CreatedAt))

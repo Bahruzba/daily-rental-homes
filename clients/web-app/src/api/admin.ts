@@ -15,9 +15,17 @@ export type AdminNotification = {
   message: string
   scheduledAt?: string | null
   sentAt?: string | null
+  providerMessageId?: string | null
+  errorMessage?: string | null
   relatedBookingId?: number | null
   relatedDepositId?: number | null
   createdAt: string
+}
+
+export type ProcessPendingNotificationsResult = {
+  processed: number
+  sent: number
+  failed: number
 }
 
 export type AdminNotificationFilters = {
@@ -33,7 +41,7 @@ export class AdminRequestError extends Error {
   }
 }
 
-const mockNotifications: AdminNotification[] = [
+let mockNotifications: AdminNotification[] = [
   {
     id: 9101,
     type: 'booking_created',
@@ -44,8 +52,10 @@ const mockNotifications: AdminNotification[] = [
     recipientPhone: '+994501000010',
     title: 'Yeni rezervasiya sorğusu',
     message: 'Qəbələ hovuzlu ev üçün yeni rezervasiya sorğusu yaradıldı.',
-    scheduledAt: '2026-07-08T10:20:00Z',
+    scheduledAt: '2020-01-01T10:20:00Z',
     sentAt: null,
+    providerMessageId: null,
+    errorMessage: null,
     relatedBookingId: 1001,
     relatedDepositId: null,
     createdAt: '2026-07-08T10:19:00Z',
@@ -60,8 +70,10 @@ const mockNotifications: AdminNotification[] = [
     recipientPhone: '+994505551212',
     title: 'Beh ödənişi tələb olunur',
     message: 'Rezervasiyanı təsdiqləmək üçün beh qəbzini yükləyin.',
-    scheduledAt: '2026-07-08T11:00:00Z',
+    scheduledAt: '2020-01-01T11:00:00Z',
     sentAt: null,
+    providerMessageId: null,
+    errorMessage: null,
     relatedBookingId: 1001,
     relatedDepositId: 5001,
     createdAt: '2026-07-08T10:55:00Z',
@@ -78,6 +90,8 @@ const mockNotifications: AdminNotification[] = [
     message: 'Beh qəbziniz təsdiqləndi və rezervasiyanız aktivdir.',
     scheduledAt: '2026-07-07T15:00:00Z',
     sentAt: '2026-07-07T15:01:00Z',
+    providerMessageId: 'fake-9103',
+    errorMessage: null,
     relatedBookingId: 1002,
     relatedDepositId: 5002,
     createdAt: '2026-07-07T14:58:00Z',
@@ -94,9 +108,47 @@ const mockNotifications: AdminNotification[] = [
     message: 'Rezervasiya statusu yeniləndi, amma SMS provider cavab vermədi.',
     scheduledAt: '2026-07-06T09:30:00Z',
     sentAt: null,
+    providerMessageId: null,
+    errorMessage: 'Demo provider xətası.',
     relatedBookingId: 1003,
     relatedDepositId: null,
     createdAt: '2026-07-06T09:28:00Z',
+  },
+  {
+    id: 9105,
+    type: 'booking_cancellation_requested',
+    channel: 'whatsapp',
+    status: 'pending',
+    recipientUserId: 2,
+    recipientName: 'Demo Broker',
+    recipientPhone: '+994501000010',
+    title: 'FAIL_FAKE_PROVIDER',
+    message: 'Fake provider uğursuzluğunu yoxlamaq üçün demo bildiriş.',
+    scheduledAt: '2020-01-01T12:00:00Z',
+    sentAt: null,
+    providerMessageId: null,
+    errorMessage: null,
+    relatedBookingId: 1004,
+    relatedDepositId: null,
+    createdAt: '2026-07-08T11:59:00Z',
+  },
+  {
+    id: 9106,
+    type: 'deposit_deadline_reminder',
+    channel: 'whatsapp',
+    status: 'pending',
+    recipientUserId: 3,
+    recipientName: 'Gələcək Müştəri',
+    recipientPhone: '+994509990000',
+    title: 'Beh deadline xatırlatması',
+    message: 'Bu future scheduled demo bildirişidir.',
+    scheduledAt: '2099-01-01T10:00:00Z',
+    sentAt: null,
+    providerMessageId: null,
+    errorMessage: null,
+    relatedBookingId: 1005,
+    relatedDepositId: 5005,
+    createdAt: '2026-07-08T12:05:00Z',
   },
 ]
 
@@ -135,6 +187,37 @@ export async function getAdminNotifications(token: string, filters: AdminNotific
   return payload.data
 }
 
+export async function processPendingNotifications(token: string, batchSize: number): Promise<ProcessPendingNotificationsResult> {
+  if (!useLiveApi) return processMockPendingNotifications(batchSize)
+
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}/api/admin/notifications/process-pending`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ batchSize }),
+    })
+  } catch (technicalCause) {
+    throw new AdminRequestError('Serverlə əlaqə qurmaq mümkün olmadı.', technicalCause)
+  }
+
+  let payload: ApiResponse<ProcessPendingNotificationsResult>
+  try {
+    payload = await response.json() as ApiResponse<ProcessPendingNotificationsResult>
+  } catch (technicalCause) {
+    throw new AdminRequestError('Serverdən düzgün cavab alınmadı.', technicalCause)
+  }
+
+  if (!response.ok || !payload.success || !payload.data) {
+    const message = response.status === 401 || response.status === 403
+      ? 'Bildirişləri emal etmək üçün admin icazəsi tələb olunur.'
+      : payload.error || 'Pending bildirişlər emal edilmədi.'
+    throw new AdminRequestError(message, new Error(payload.error))
+  }
+
+  return payload.data
+}
+
 function applyMockNotificationFilters(filters: AdminNotificationFilters) {
   return mockNotifications.filter((item) => {
     if (filters.status?.trim() && item.status !== filters.status.trim()) return false
@@ -142,4 +225,29 @@ function applyMockNotificationFilters(filters: AdminNotificationFilters) {
     if (filters.bookingId?.trim() && `${item.relatedBookingId ?? ''}` !== filters.bookingId.trim()) return false
     return true
   })
+}
+
+function processMockPendingNotifications(batchSize: number): ProcessPendingNotificationsResult {
+  const now = Date.now()
+  const due = mockNotifications
+    .filter((item) => item.status === 'pending' && (!item.scheduledAt || new Date(item.scheduledAt).getTime() <= now))
+    .sort((left, right) => (left.scheduledAt ?? left.createdAt).localeCompare(right.scheduledAt ?? right.createdAt))
+    .slice(0, Math.min(Math.max(batchSize, 1), 100))
+
+  let sent = 0
+  let failed = 0
+  const processedAt = new Date().toISOString()
+  const dueIds = new Set(due.map((item) => item.id))
+  mockNotifications = mockNotifications.map((item) => {
+    if (!dueIds.has(item.id)) return item
+    const content = `${item.title} ${item.message} ${item.recipientName ?? ''} ${item.recipientPhone}`
+    if (content.toUpperCase().includes('FAIL_FAKE_PROVIDER')) {
+      failed += 1
+      return { ...item, status: 'failed', errorMessage: 'Fake provider failure marker was found.', providerMessageId: null }
+    }
+    sent += 1
+    return { ...item, status: 'sent', sentAt: processedAt, providerMessageId: `fake-${item.id}`, errorMessage: null }
+  })
+
+  return { processed: due.length, sent, failed }
 }
