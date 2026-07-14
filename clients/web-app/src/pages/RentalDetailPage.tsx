@@ -10,7 +10,28 @@ import type { RentalHome } from '../types'
 export function RentalDetailPage() {
   const { id } = useParams()
   const [home, setHome] = useState<RentalHome>()
+  const [shareMessage, setShareMessage] = useState('')
+  const [shareError, setShareError] = useState('')
   useEffect(() => { getRentalHomeById(Number(id)).then(setHome) }, [id])
+
+  async function shareProperty() {
+    if (!home) return
+    const url = window.location.href
+    setShareMessage('')
+    setShareError('')
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: home.title, url })
+        return
+      }
+      await navigator.clipboard.writeText(url)
+      setShareMessage('Link kopyalandı.')
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      console.error('Property share failed', cause)
+      setShareError('Paylaşmaq və ya linki kopyalamaq mümkün olmadı. Brauzer icazələrini yoxlayın.')
+    }
+  }
 
   if (!home) return <AppLayout><div className="container page-loading">Ev məlumatları yüklənir…</div></AppLayout>
 
@@ -18,7 +39,9 @@ export function RentalDetailPage() {
     <AppLayout>
       <section className="detail-page container">
         <Link className="back-link" to="/"><ArrowLeft size={16} /> Bütün evlər</Link>
-        <div className="detail-title-row"><div><div className="detail-location"><MapPin size={15} /> {home.city}{home.district ? `, ${home.district}` : ''}</div><h1>{home.title}</h1><div className="detail-submeta"><span><Star size={15} fill="currentColor" /> {home.rating} · {home.reviews} rəy</span><span>Elan #{1000 + home.id}</span></div></div><div className="detail-actions"><button className="button button-ghost"><Share2 size={17} /> Paylaş</button><button className="button button-ghost"><Heart size={17} /> Saxla</button></div></div>
+        <div className="detail-title-row"><div><div className="detail-location"><MapPin size={15} /> {home.city}{home.district ? `, ${home.district}` : ''}</div><h1>{home.title}</h1><div className="detail-submeta"><span><Star size={15} fill="currentColor" /> {home.rating} · {home.reviews} rəy</span><span>Elan #{1000 + home.id}</span></div></div><div className="detail-actions"><button type="button" className="button button-ghost" onClick={() => void shareProperty()}><Share2 size={17} /> Paylaş</button><button className="button button-ghost"><Heart size={17} /> Saxla</button></div></div>
+        {shareMessage && <div className="account-success">{shareMessage}</div>}
+        {shareError && <div className="broker-error" role="alert">{shareError}</div>}
 
         <ImageGallery home={home} />
         <RentalHomeDetail home={home} />

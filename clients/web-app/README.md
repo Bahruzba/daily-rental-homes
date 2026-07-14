@@ -60,6 +60,8 @@ Filterlər URL query param-larında saxlanılır. Live rejimdə frontend bu para
 
 Date availability davranışı backend qaydasına uyğundur: manual broker blokları və aktiv/blocking booking-lər seçilmiş tarix aralığında evi siyahıdan çıxarır. Rejected və cancelled booking-lər tarixləri bloklamır; pending booking-lər hələ mövcud qaydaya əsasən bloklayır.
 
+Public property detail səhifəsində `Paylaş` düyməsi var. Dəstəklənən cihazlarda browser-in Web Share API-si ilə ev başlığı və cari səhifə URL-i paylaşılır. Web Share dəstəklənmirsə, frontend cari URL-i clipboard-a kopyalayır və `Link kopyalandı.` mesajı göstərir. Linkə əlavə property məlumatı və query parametri yazılmır.
+
 Customer `/account` səhifəsi müştərinin öz rezervasiyalarını kart formatında göstərir: ev adı, şəhər/rayon, tarix sayı, toplam məbləğ, booking statusu, beh/qəbz statusu və növbəti addım. `/account/bookings/:id` səhifəsi ev xülasəsi, seçilmiş tarixlər, qonaq sayı, qiymət, status izahı və beh məlumatlarını daha detallı göstərir.
 
 Customer-visible status davranışı:
