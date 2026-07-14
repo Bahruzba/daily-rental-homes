@@ -76,6 +76,8 @@ Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunu
 
 Customer `/account` rezervasiya siyahısında status filteri var. Seçilmiş status localStorage-da `daily-homes-customer-booking-filters` açarı ilə saxlanılır və müştəri səhifəyə qayıdanda bərpa olunur. `Filtrləri sıfırla` düyməsi UI filterini təmizləyir, saxlanmış dəyəri silir və tam rezervasiya siyahısını yenidən yükləyir. Mock və live rejimlərdə filter frontend-də yüklənmiş siyahı üzərində tətbiq olunur.
 
+Customer booking detail səhifəsində `Linki kopyala` düyməsi cari browser URL-ni clipboard-a yazır. Uğurda `Link kopyalandı.` mesajı göstərilir; clipboard icazəsi alınmasa oxunaqlı xəta göstərilir. Linkdə əlavə booking məlumatı və query parametri yaradılmır.
+
 Customer `/account/bookings/:id` səhifəsində aktiv rezervasiyalar üçün sadə ləğv sorğusu UI göstərilir. Göründüyü statuslar:
 
 - `pending`
