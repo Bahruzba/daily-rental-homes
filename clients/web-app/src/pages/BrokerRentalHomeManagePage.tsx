@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarX, ImagePlus, Save, Star, Trash2 } from 'lucide-react'
+import { ArrowLeft, CalendarX, ChevronLeft, ChevronRight, ImagePlus, Save, Star, Trash2, X } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -43,6 +43,7 @@ export function BrokerRentalHomeManagePage() {
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [mediaBusyId, setMediaBusyId] = useState<number>()
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [blockBusyId, setBlockBusyId] = useState<number>()
   const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', note: '' })
   const [error, setError] = useState('')
@@ -51,6 +52,7 @@ export function BrokerRentalHomeManagePage() {
     return state?.success ?? ''
   })
   const title = useMemo(() => isNew ? 'Yeni ev əlavə et' : 'Evi idarə et', [isNew])
+  const previewMedia = previewIndex !== null ? home?.media[previewIndex] : undefined
 
   useEffect(() => {
     if (!session || isNew) return
@@ -78,6 +80,24 @@ export function BrokerRentalHomeManagePage() {
   function update<K extends keyof BrokerRentalHomePayload>(key: K, value: BrokerRentalHomePayload[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
+
+  function movePreview(direction: -1 | 1) {
+    setPreviewIndex((current) => {
+      if (current === null || !home?.media.length) return current
+      return (current + direction + home.media.length) % home.media.length
+    })
+  }
+
+  useEffect(() => {
+    if (!previewMedia) return
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setPreviewIndex(null)
+      if (event.key === 'ArrowLeft') movePreview(-1)
+      if (event.key === 'ArrowRight') movePreview(1)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [previewMedia, home?.media.length])
 
   async function save(event: FormEvent) {
     event.preventDefault()
@@ -219,8 +239,11 @@ export function BrokerRentalHomeManagePage() {
         {isNew ? <p>Əvvəlcə evi yaradın, sonra şəkil əlavə edin.</p> : <>
           <label className="button button-primary broker-upload-button"><ImagePlus size={16} /> Şəkil yüklə<input type="file" accept="image/jpeg,image/png,image/webp" disabled={saving} onChange={upload} /></label>
           <div className="broker-media-list">
-            {home?.media.length ? home.media.map((media) => <article key={media.id}>
-              <img src={resolveApiAssetUrl(media.url)} alt="Ev şəkli" />
+            {home?.media.length ? home.media.map((media, index) => <article key={media.id}>
+              <button type="button" className="broker-media-thumb" aria-label="Şəkilə böyük bax" onClick={() => setPreviewIndex(index)}>
+                <img src={resolveApiAssetUrl(media.url)} alt="Ev şəkli" />
+                {media.isMain && <span>Əsas</span>}
+              </button>
               <div><strong>{media.isMain ? 'Əsas şəkil' : 'Ev şəkli'}</strong><span>{media.contentType} · {media.sizeBytes ? Math.round(media.sizeBytes / 1024) : 0} KB</span></div>
               <button type="button" className="icon-button" title="Əsas şəkil et" disabled={mediaBusyId === media.id || media.isMain} onClick={() => void mediaAction(() => setBrokerRentalHomeMainMedia(homeId, media.id, session!.accessToken), 'Əsas şəkil dəyişdirildi.', media.id)}><Star size={16} /></button>
               <button type="button" className="icon-button danger" title="Sil" disabled={mediaBusyId === media.id} onClick={() => void mediaAction(() => deleteBrokerRentalHomeMedia(homeId, media.id, session!.accessToken), 'Şəkil silindi.', media.id)}><Trash2 size={16} /></button>
@@ -247,5 +270,22 @@ export function BrokerRentalHomeManagePage() {
         </>}
       </aside>
     </div>}
+    {previewMedia && home?.media.length ? <div className="broker-media-preview" role="dialog" aria-modal="true" aria-label="Şəkil önbaxışı" onClick={() => setPreviewIndex(null)}>
+      <div className="broker-media-preview-card" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="broker-preview-close" aria-label="Bağla" onClick={() => setPreviewIndex(null)}><X size={20} /></button>
+        <div className="broker-media-preview-image">
+          <button type="button" className="broker-preview-nav previous" aria-label="Əvvəlki şəkil" onClick={() => movePreview(-1)}><ChevronLeft size={24} /></button>
+          <img src={resolveApiAssetUrl(previewMedia.url)} alt="Ev şəkli önbaxışı" />
+          <button type="button" className="broker-preview-nav next" aria-label="Növbəti şəkil" onClick={() => movePreview(1)}><ChevronRight size={24} /></button>
+        </div>
+        <div className="broker-media-preview-footer">
+          <div>
+            <strong>{previewMedia.isMain ? 'Əsas şəkil' : 'Ev şəkli'}</strong>
+            <span>{previewIndex! + 1} / {home.media.length}</span>
+          </div>
+          {previewMedia.isMain ? <span className="status-badge status-confirmed"><Star size={14} /> Cari əsas şəkil</span> : <button type="button" className="button button-primary" disabled={mediaBusyId === previewMedia.id} onClick={() => void mediaAction(() => setBrokerRentalHomeMainMedia(homeId, previewMedia.id, session!.accessToken), 'Əsas şəkil dəyişdirildi.', previewMedia.id)}><Star size={16} /> Əsas şəkil et</button>}
+        </div>
+      </div>
+    </div> : null}
   </div></section></AppLayout>
 }

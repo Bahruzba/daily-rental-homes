@@ -132,6 +132,8 @@ Broker property list kartlarında `Duplikat yarat` düyməsi var. Live rejimdə 
 
 Şəkil upload-u JPG, PNG və WebP faylları üçün 5 MB limitlə işləyir. Live rejimdə yüklənmiş fayllar backend-in lokal `/uploads/rental-homes/...` URL-ləri ilə göstərilir. Production üçün private object storage, resize/compression və daha sərt content validation ayrıca mərhələdir.
 
+Broker edit səhifəsində şəkilə klik full-screen önbaxış açır. Önbaxışda əvvəlki/növbəti şəkil düymələri, `Escape` ilə bağlama, sol/sağ oxlarla keçid, backdrop-a kliklə bağlama və `3 / 12` formatında mövqe göstəricisi var. Cari əsas şəkil ayrıca işarələnir; əsas olmayan şəkil üçün `Əsas şəkil et` düyməsi mövcud set-main endpoint/mock funksiyasını çağırır və media siyahısını yeniləyir.
+
 Broker edit səhifəsində sadə “Uyğun olmayan tarixlər” bölməsi var. Start/end date və broker qeydi ilə tarix aralığı bloklana bilər; qeyd public müştəri ekranında göstərilmir. Mock rejimdə bloklar lokal state-də saxlanır, live rejimdə backend endpoint-ləri çağırılır. Public booking form backend-dən gələn unavailable ranges əsasında uyğun olmayan tarixləri boz/disabled göstərir və backend overlap xətasını oxunaqlı mesajla göstərir.
 
 ## Beh axını
