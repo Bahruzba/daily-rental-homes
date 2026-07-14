@@ -1,7 +1,8 @@
-import { Building2, CalendarDays, ClipboardList, Coins, Phone, RefreshCw, UsersRound, WalletCards } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Building2, CalendarDays, ClipboardList, Coins, Copy, Phone, RefreshCw, UsersRound, WalletCards } from 'lucide-react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
+  duplicateBrokerRentalHome,
   getBrokerBookings,
   getBrokerRentalHomes,
   getBrokerReportSummary,
@@ -32,6 +33,7 @@ const statusOptions = [
 
 export function BrokerDashboardPage() {
   const { session } = useAuth()
+  const navigate = useNavigate()
   const [summary, setSummary] = useState<BrokerSummary>()
   const [reportSummary, setReportSummary] = useState<BrokerReportSummary>()
   const [homes, setHomes] = useState<BrokerRentalHome[]>([])
@@ -47,6 +49,7 @@ export function BrokerDashboardPage() {
   const [reportError, setReportError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [duplicatingHomeId, setDuplicatingHomeId] = useState<number>()
 
   const currentBookingFilters = (): BrokerBookingFilters => (
     bookingStatus || bookingFrom || bookingTo
@@ -139,6 +142,23 @@ export function BrokerDashboardPage() {
     setReportFrom('')
     setReportTo('')
     void loadReportSummary('', '')
+  }
+
+  const duplicateHome = async (event: MouseEvent, home: BrokerRentalHome) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!session) return
+    setDuplicatingHomeId(home.id)
+    setError('')
+    try {
+      const result = await duplicateBrokerRentalHome(home.id, session.accessToken)
+      navigate(`/broker/rental-homes/${result.id}/edit`, { state: { success: 'Elanın surəti yaradıldı.' } })
+    } catch (cause) {
+      console.error('Broker rental home duplicate failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Elanın surəti yaradılmadı.')
+    } finally {
+      setDuplicatingHomeId(undefined)
+    }
   }
 
   useEffect(() => { void load() }, [session?.accessToken])
@@ -266,6 +286,14 @@ export function BrokerDashboardPage() {
                         <strong>{money.format(home.dailyPrice)} / gecə</strong>
                       </div>
                       <em className={home.isPublished ? 'is-active' : ''}>{home.isPublished ? 'Aktiv' : 'Gizli'}</em>
+                      <button
+                        type="button"
+                        className="button button-ghost broker-duplicate-button"
+                        disabled={duplicatingHomeId === home.id}
+                        onClick={(event) => void duplicateHome(event, home)}
+                      >
+                        <Copy size={15} /> {duplicatingHomeId === home.id ? 'Yaradılır…' : 'Duplikat yarat'}
+                      </button>
                     </Link>
                   ))}
                 </div>
