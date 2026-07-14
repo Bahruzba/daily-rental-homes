@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout'
 import { ImageGallery } from '../components/ImageGallery'
 import { RentalHomeDetail } from '../components/RentalHomeDetail'
 import { getRentalHomeById } from '../api/client'
+import { useFavoriteProperties } from '../hooks/useFavoriteProperties'
 import type { RentalHome } from '../types'
 
 export function RentalDetailPage() {
@@ -12,6 +13,7 @@ export function RentalDetailPage() {
   const [home, setHome] = useState<RentalHome>()
   const [shareMessage, setShareMessage] = useState('')
   const [shareError, setShareError] = useState('')
+  const { isFavorite, toggleFavorite } = useFavoriteProperties()
   useEffect(() => { getRentalHomeById(Number(id)).then(setHome) }, [id])
 
   async function shareProperty() {
@@ -34,12 +36,14 @@ export function RentalDetailPage() {
   }
 
   if (!home) return <AppLayout><div className="container page-loading">Ev məlumatları yüklənir…</div></AppLayout>
+  const favorite = isFavorite(home.id)
+  const favoriteLabel = favorite ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'
 
   return (
     <AppLayout>
       <section className="detail-page container">
         <Link className="back-link" to="/"><ArrowLeft size={16} /> Bütün evlər</Link>
-        <div className="detail-title-row"><div><div className="detail-location"><MapPin size={15} /> {home.city}{home.district ? `, ${home.district}` : ''}</div><h1>{home.title}</h1><div className="detail-submeta"><span><Star size={15} fill="currentColor" /> {home.rating} · {home.reviews} rəy</span><span>Elan #{1000 + home.id}</span></div></div><div className="detail-actions"><button type="button" className="button button-ghost" onClick={() => void shareProperty()}><Share2 size={17} /> Paylaş</button><button className="button button-ghost"><Heart size={17} /> Saxla</button></div></div>
+        <div className="detail-title-row"><div><div className="detail-location"><MapPin size={15} /> {home.city}{home.district ? `, ${home.district}` : ''}</div><h1>{home.title}</h1><div className="detail-submeta"><span><Star size={15} fill="currentColor" /> {home.rating} · {home.reviews} rəy</span><span>Elan #{1000 + home.id}</span></div></div><div className="detail-actions"><button type="button" className="button button-ghost" onClick={() => void shareProperty()}><Share2 size={17} /> Paylaş</button><button type="button" className={`button button-ghost favorite-detail-button${favorite ? ' is-favorite' : ''}`} aria-label={favoriteLabel} title={favoriteLabel} onClick={() => toggleFavorite(home.id)}><Heart size={17} fill={favorite ? 'currentColor' : 'none'} /> {favoriteLabel}</button></div></div>
         {shareMessage && <div className="account-success">{shareMessage}</div>}
         {shareError && <div className="broker-error" role="alert">{shareError}</div>}
 
