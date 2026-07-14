@@ -95,7 +95,7 @@ Broker `/broker` dashboard rezervasiya siyahısında sadə filterlər var:
 - başlanğıc tarix
 - bitiş tarix
 
-Live rejimdə status və tarix filterləri `GET /api/broker/bookings` endpoint-inə query param kimi göndərilir. Mock rejimdə eyni filterlər lokal demo rezervasiyalar üzərində tətbiq olunur. Tarix filterində yalnız bir tarix seçilərsə və ya başlanğıc tarixi bitiş tarixindən sonra olarsa, frontend API çağırmadan oxunaqlı xəta göstərir. “Təmizlə” düyməsi filterləri sıfırlayır və bütün rezervasiyaları yenidən yükləyir.
+Live rejimdə status və tarix filterləri `GET /api/broker/bookings` endpoint-inə query param kimi göndərilir. Response-da `hasPendingCancellationRequest` true olduqda kartda `Ləğv sorğusu` badge-i göstərilir. Mock rejimdə eyni filterlər lokal demo rezervasiyalar üzərində tətbiq olunur və bir demo rezervasiya ləğv sorğusu badge-i ilə göstərilir. Tarix filterində yalnız bir tarix seçilərsə və ya başlanğıc tarixi bitiş tarixindən sonra olarsa, frontend API çağırmadan oxunaqlı xəta göstərir. “Təmizlə” düyməsi filterləri sıfırlayır və bütün rezervasiyaları yenidən yükləyir.
 
 Siyahı kartları booking ID, ev adı, müştəri adı/telefonu, tarix aralığı, gecə sayı, status və toplam məbləği göstərir. Status chip-ləri hazırda yüklənmiş nəticələrin qısa xülasəsidir; pagination və inkişaf etmiş axtarış bu mərhələyə daxil deyil.
 

@@ -214,6 +214,8 @@ Booking status lifecycle MVP:
 
 The generic broker status endpoint remains for backward compatibility and permits cancellation only. Deposit request/approval flow remains separate: accepting a booking does not automatically create a deposit, and requesting a deposit still moves an eligible booking to `waiting_deposit`. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
+Broker booking list (`GET /api/broker/bookings`) includes `hasPendingCancellationRequest`, which is `true` only when that booking has an active `pending` customer cancellation request. Approved, rejected, or otherwise resolved requests return `false`, and another broker's bookings remain hidden by the existing scope rules.
+
 Broker booking detail (`GET /api/broker/bookings/{id}`) includes a nullable `cancellationRequest` summary when the booking has an active pending customer cancellation request. The summary contains `id`, `bookingId`, `statusCode`, optional `reason`, optional `decisionNote`, `createdAt`, and nullable `decidedAt`. Pending cancellation requests can be decided through:
 
 - POST /api/broker/bookings/{bookingId}/cancellation-requests/{requestId}/approve

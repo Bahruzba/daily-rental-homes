@@ -109,6 +109,7 @@ public sealed class BrokerController : ControllerBase
             .Include(booking => booking.RentalHome)
             .Include(booking => booking.Status)
             .Include(booking => booking.Dates)
+            .Include(booking => booking.CancellationRequests)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -404,7 +405,8 @@ public sealed class BrokerController : ControllerBase
             dates.Count == 0 ? null : dates[^1],
             booking.CreatedAt,
             booking.CustomerNote,
-            booking.Status?.Code == BookingStatusCodes.WaitingDeposit);
+            booking.Status?.Code == BookingStatusCodes.WaitingDeposit,
+            booking.CancellationRequests.Any(request => !request.IsDeleted && request.StatusCode == "pending"));
     }
 
     private static BrokerBookingDetailResponse ToDetail(Booking booking)
