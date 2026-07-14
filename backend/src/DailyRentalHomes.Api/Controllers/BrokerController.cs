@@ -53,13 +53,30 @@ public sealed class BrokerController : ControllerBase
         var homes = ScopeHomes(_db.RentalHomes.AsNoTracking());
         var bookings = ScopeBookings(_db.Bookings.AsNoTracking());
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var totalProperties = await homes.CountAsync(cancellationToken);
+        var publishedProperties = await homes.CountAsync(home => home.IsPublished, cancellationToken);
+        var totalBookings = await bookings.CountAsync(cancellationToken);
+        var pendingBookings = await bookings.CountAsync(booking => booking.Status!.Code == BookingStatusCodes.Pending, cancellationToken);
+        var pendingDeposits = await bookings.CountAsync(booking => booking.Status!.Code == BookingStatusCodes.WaitingDeposit, cancellationToken);
+        var activeBookings = await bookings.CountAsync(
+            booking => booking.Status!.Code != BookingStatusCodes.Cancelled &&
+                       booking.Status.Code != BookingStatusCodes.Rejected &&
+                       booking.Status.Code != BookingStatusCodes.Completed,
+            cancellationToken);
+        var scopedBookingIds = await bookings.Select(booking => booking.Id).ToListAsync(cancellationToken);
+        var pendingCancellationRequests = await _db.BookingCancellationRequests.AsNoTracking()
+            .CountAsync(
+                request => scopedBookingIds.Contains(request.BookingId) &&
+                           !request.IsDeleted &&
+                           request.StatusCode == "pending",
+                cancellationToken);
 
         var response = new BrokerSummaryResponse(
-            await homes.CountAsync(cancellationToken),
-            await homes.CountAsync(home => home.IsPublished, cancellationToken),
-            await bookings.CountAsync(cancellationToken),
-            await bookings.CountAsync(booking => booking.Status!.Code == BookingStatusCodes.Pending, cancellationToken),
-            await bookings.CountAsync(booking => booking.Status!.Code == BookingStatusCodes.WaitingDeposit, cancellationToken),
+            totalProperties,
+            publishedProperties,
+            totalBookings,
+            pendingBookings,
+            pendingDeposits,
             await bookings.CountAsync(
                 booking => booking.Status!.Code != BookingStatusCodes.Cancelled &&
                            booking.Status.Code != BookingStatusCodes.Rejected &&
@@ -67,7 +84,12 @@ public sealed class BrokerController : ControllerBase
                 cancellationToken),
             await bookings
                 .Where(booking => booking.Status!.Code != BookingStatusCodes.Cancelled && booking.Status.Code != BookingStatusCodes.Rejected)
-                .SumAsync(booking => booking.TotalAmount, cancellationToken));
+                .SumAsync(booking => booking.TotalAmount, cancellationToken),
+            totalProperties,
+            publishedProperties,
+            activeBookings,
+            pendingDeposits,
+            pendingCancellationRequests);
 
         return Ok(ApiResponse<BrokerSummaryResponse>.Ok(response));
     }
