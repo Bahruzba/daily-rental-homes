@@ -1,10 +1,11 @@
-import { ArrowRight, BadgeCheck, Headphones, SearchCheck, ShieldCheck } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Headphones, Heart, SearchCheck, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { RentalHomeGrid } from '../components/RentalHomeGrid'
 import { SearchFilters } from '../components/SearchFilters'
 import { getRentalHomes, type RentalHomeFilters } from '../api/client'
+import { useFavoriteProperties } from '../hooks/useFavoriteProperties'
 import type { RentalHome } from '../types'
 
 const filterKeys: Array<keyof RentalHomeFilters> = ['q', 'city', 'district', 'guests', 'minPrice', 'maxPrice', 'startDate', 'endDate']
@@ -52,9 +53,12 @@ export function HomePage() {
   const filters = useMemo(() => filtersFromParams(params), [params])
   const [homes, setHomes] = useState<RentalHome[]>([])
   const [sort, setSort] = useState<SortOption>(readSavedSort)
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const { favoriteIds, isFavorite, toggleFavorite } = useFavoriteProperties()
   const sortedHomes = useMemo(() => sortHomes(homes, sort), [homes, sort])
+  const visibleHomes = useMemo(() => showFavoritesOnly ? sortedHomes.filter((home) => isFavorite(home.id)) : sortedHomes, [isFavorite, showFavoritesOnly, sortedHomes])
 
   useEffect(() => {
     const validation = validateFilters(filters)
@@ -130,9 +134,10 @@ export function HomePage() {
             <div>
               <span className="eyebrow">SEÇİLMİŞ MƏKANLAR</span>
               <h2>{hasFilters(filters) ? 'Axtarış nəticələri' : 'İndi kəşf etməyə dəyər'}</h2>
-              <p>{error ? 'Filtrləri düzəldib yenidən yoxlayın' : `${sortedHomes.length} uyğun ev · qiymətlər bir gecə üçündür`}</p>
+              <p>{error ? 'Filtrləri düzəldib yenidən yoxlayın' : `${visibleHomes.length} uyğun ev · qiymətlər bir gecə üçündür`}</p>
             </div>
             <div className="listing-actions">
+              <button type="button" className={`button button-ghost favorite-filter-toggle${showFavoritesOnly ? ' is-active' : ''}`} onClick={() => setShowFavoritesOnly((current) => !current)}><Heart size={16} fill={showFavoritesOnly ? 'currentColor' : 'none'} /> Seçilmişlər {favoriteIds.length ? `(${favoriteIds.length})` : ''}</button>
               <label className="sort-control"><span>Sırala</span><select value={sort} onChange={(event) => updateSort(event.target.value as SortOption)}>
                 <option value="">Standart</option>
                 <option value="newest">Yeni elanlar</option>
@@ -144,7 +149,16 @@ export function HomePage() {
             </div>
           </div>
           {error && <div className="broker-error" role="alert">{error}</div>}
-          <RentalHomeGrid homes={sortedHomes} loading={loading} onClear={clearFilters} />
+          <RentalHomeGrid
+            homes={visibleHomes}
+            loading={loading}
+            onClear={clearFilters}
+            isFavorite={isFavorite}
+            onToggleFavorite={toggleFavorite}
+            emptyTitle={showFavoritesOnly ? 'Seçilmiş elan yoxdur.' : undefined}
+            emptyDescription={showFavoritesOnly ? 'Ürək işarəsinə klikləyərək elanları seçilmişlərə əlavə edin.' : undefined}
+            emptyAction={showFavoritesOnly ? <button type="button" className="button button-primary" onClick={() => setShowFavoritesOnly(false)}>Bütün nəticələr</button> : undefined}
+          />
         </div>
       </section>
 

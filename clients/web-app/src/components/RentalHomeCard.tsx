@@ -2,14 +2,22 @@ import { Heart, MapPin, Star, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { RentalHome } from '../types'
 
-export function RentalHomeCard({ home }: { home: RentalHome }) {
+type Props = {
+  home: RentalHome
+  isFavorite?: boolean
+  onToggleFavorite?: (id: number) => void
+}
+
+export function RentalHomeCard({ home, isFavorite = false, onToggleFavorite }: Props) {
+  const favoriteLabel = isFavorite ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'
+
   return (
     <article className="home-card">
       <Link className="card-image-wrap" to={`/homes/${home.id}`}>
         <img className="card-image" src={home.images[0]} alt={home.imageAlt} />
         {home.badge && <span className="card-badge">{home.badge}</span>}
       </Link>
-      <button type="button" className="card-favorite" aria-label="Seçilmişlərə əlavə et"><Heart size={18} /></button>
+      <button type="button" className={`card-favorite${isFavorite ? ' is-favorite' : ''}`} aria-label={favoriteLabel} title={favoriteLabel} onClick={() => onToggleFavorite?.(home.id)}><Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} /></button>
       <div className="home-card-body">
         <div className="card-topline"><span className="card-location"><MapPin size={14} /> {home.city}{home.district ? `, ${home.district}` : ''}</span><span className="rating"><Star size={14} fill="currentColor" /> {home.rating}</span></div>
         <Link to={`/homes/${home.id}`}><h3>{home.title}</h3></Link>
