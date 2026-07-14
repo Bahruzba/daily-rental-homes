@@ -19,6 +19,26 @@ import { EmptyState } from '../components/EmptyState'
 
 const money = new Intl.NumberFormat('az-AZ', { style: 'currency', currency: 'AZN', maximumFractionDigits: 0 })
 const date = new Intl.DateTimeFormat('az-AZ', { day: '2-digit', month: 'short', year: 'numeric' })
+const propertyFilterStorageKey = 'daily-homes-broker-property-filters'
+
+type PropertyFilters = {
+  search: string
+  publishStatus: string
+}
+
+function readPropertyFilters(): PropertyFilters {
+  try {
+    const saved = window.localStorage.getItem(propertyFilterStorageKey)
+    if (!saved) return { search: '', publishStatus: '' }
+    const parsed = JSON.parse(saved) as Partial<PropertyFilters>
+    return {
+      search: typeof parsed.search === 'string' ? parsed.search : '',
+      publishStatus: typeof parsed.publishStatus === 'string' ? parsed.publishStatus : '',
+    }
+  } catch {
+    return { search: '', publishStatus: '' }
+  }
+}
 
 const statusOptions = [
   { value: '', label: 'Hamısı' },
@@ -47,6 +67,8 @@ export function BrokerDashboardPage() {
   const [reportTo, setReportTo] = useState('')
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState('')
+  const [propertySearch, setPropertySearch] = useState(() => readPropertyFilters().search)
+  const [propertyPublishStatus, setPropertyPublishStatus] = useState(() => readPropertyFilters().publishStatus)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [duplicatingHomeId, setDuplicatingHomeId] = useState<number>()
@@ -144,6 +166,12 @@ export function BrokerDashboardPage() {
     void loadReportSummary('', '')
   }
 
+  const resetPropertyFilters = () => {
+    setPropertySearch('')
+    setPropertyPublishStatus('')
+    window.localStorage.removeItem(propertyFilterStorageKey)
+  }
+
   const duplicateHome = async (event: MouseEvent, home: BrokerRentalHome) => {
     event.preventDefault()
     event.stopPropagation()
@@ -163,6 +191,17 @@ export function BrokerDashboardPage() {
 
   useEffect(() => { void load() }, [session?.accessToken])
 
+  useEffect(() => {
+    if (!propertySearch.trim() && !propertyPublishStatus) {
+      window.localStorage.removeItem(propertyFilterStorageKey)
+      return
+    }
+    window.localStorage.setItem(propertyFilterStorageKey, JSON.stringify({
+      search: propertySearch,
+      publishStatus: propertyPublishStatus,
+    }))
+  }, [propertySearch, propertyPublishStatus])
+
   const reportIsEmpty = reportSummary
     ? reportSummary.bookingCount === 0 &&
       reportSummary.revenueBookingCount === 0 &&
@@ -178,6 +217,21 @@ export function BrokerDashboardPage() {
     confirmed: bookings.filter((booking) => booking.statusCode === 'confirmed').length,
     inactive: bookings.filter((booking) => booking.statusCode === 'cancelled' || booking.statusCode === 'rejected').length,
   }), [bookings])
+
+  const filteredHomes = useMemo(() => {
+    const search = propertySearch.trim().toLocaleLowerCase('az-AZ')
+    return homes.filter((home) => {
+      if (propertyPublishStatus === 'published' && !home.isPublished) return false
+      if (propertyPublishStatus === 'draft' && home.isPublished) return false
+      if (!search) return true
+      return [
+        home.title,
+        home.city,
+        home.district ?? '',
+        home.address ?? '',
+      ].some((value) => value.toLocaleLowerCase('az-AZ').includes(search))
+    })
+  }, [homes, propertyPublishStatus, propertySearch])
 
   return (
     <AppLayout>
@@ -274,9 +328,30 @@ export function BrokerDashboardPage() {
                 </div>
                 <Link className="button button-primary" to="/broker/rental-homes/new">Ev əlavə et</Link>
               </div>
-              {homes.length ? (
+
+              <div className="broker-property-filter-panel">
+                <label>
+                  <span>Axtarış</span>
+                  <input
+                    value={propertySearch}
+                    onChange={(event) => setPropertySearch(event.target.value)}
+                    placeholder="Elan adı, şəhər və ya ünvan"
+                  />
+                </label>
+                <label>
+                  <span>Yayın statusu</span>
+                  <select value={propertyPublishStatus} onChange={(event) => setPropertyPublishStatus(event.target.value)}>
+                    <option value="">Hamısı</option>
+                    <option value="published">Aktiv</option>
+                    <option value="draft">Gizli</option>
+                  </select>
+                </label>
+                <button className="button button-ghost" onClick={resetPropertyFilters}>Filtrləri sıfırla</button>
+              </div>
+
+              {filteredHomes.length ? (
                 <div className="broker-homes-grid">
-                  {homes.map((home) => (
+                  {filteredHomes.map((home) => (
                     <Link to={`/broker/rental-homes/${home.id}/edit`} key={home.id}>
                       {home.mainImageUrl ? <img src={home.mainImageUrl} alt={home.title} /> : <div className="broker-home-placeholder"><Building2 /></div>}
                       <div>
@@ -297,6 +372,8 @@ export function BrokerDashboardPage() {
                     </Link>
                   ))}
                 </div>
+              ) : homes.length ? (
+                <EmptyState title="Bu filterlərə uyğun elan tapılmadı." description="Filtrləri sıfırlayıb yenidən yoxlayın." />
               ) : (
                 <EmptyState title="Brokerə bağlı ev yoxdur" description="Ev əlavə edildikdə burada görünəcək." />
               )}
