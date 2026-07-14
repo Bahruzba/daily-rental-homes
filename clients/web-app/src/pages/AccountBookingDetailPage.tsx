@@ -130,6 +130,18 @@ export function AccountBookingDetailPage() {
     }
   }
 
+  const copyBookingLink = async () => {
+    setError('')
+    setSuccess('')
+    try {
+      await window.navigator.clipboard.writeText(window.location.href)
+      setSuccess('Link kopyalandı.')
+    } catch (cause) {
+      console.error('Booking link copy failed', cause)
+      setError('Linki kopyalamaq mümkün olmadı. Brauzer icazələrini yoxlayın.')
+    }
+  }
+
   return (
     <AppLayout>
       <section className="account-detail-page">
@@ -150,6 +162,9 @@ export function AccountBookingDetailPage() {
                 <div>
                   <em className={`broker-status status-${booking.statusCode}`}>{bookingLabels[booking.statusCode] ?? booking.statusName}</em>
                   <strong>{money.format(booking.totalAmount)}</strong>
+                  <button className="button button-ghost" type="button" onClick={() => void copyBookingLink()}>
+                    Linki kopyala
+                  </button>
                 </div>
               </div>
 
