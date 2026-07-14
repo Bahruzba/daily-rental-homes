@@ -72,3 +72,13 @@ public sealed record BrokerBookingStatusHistoryResponse(
     string? Note,
     DateTime ChangedAt);
 public sealed record BrokerBookingStatusChangeResponse(long BookingId, string StatusCode, string StatusName);
+
+public sealed record BrokerCalendarEventResponse(
+    long? BookingId,
+    long RentalHomeId,
+    string RentalHomeTitle,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string? BookingStatus,
+    string? CustomerName,
+    string EventType);

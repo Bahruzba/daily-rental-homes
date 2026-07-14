@@ -115,6 +115,17 @@ export type BrokerBookingFilters = {
   to?: string
 }
 
+export type BrokerCalendarEvent = {
+  bookingId?: number | null
+  rentalHomeId: number
+  rentalHomeTitle: string
+  startDate: string
+  endDate: string
+  bookingStatus?: string | null
+  customerName?: string | null
+  eventType: 'booking' | 'manual-block'
+}
+
 export type BrokerBookingDetail = {
   bookingId: number
   rentalHome: { id: number; title: string; city: string; district?: string | null }
@@ -195,6 +206,10 @@ let mockHomes: BrokerRentalHomeDetail[] = [
   { id: 1, title: 'Dağ mənzərəli hovuzlu bağ evi', city: 'Qəbələ', district: 'Vəndam', dailyPrice: 180, guestCount: 8, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/qebele-villa.webp`, bookingCount: 3 },
   { id: 2, title: 'Meşə içində sakit kottec', city: 'İsmayıllı', district: 'Lahıc yolu', dailyPrice: 125, guestCount: 5, isPublished: true, mainImageUrl: `${import.meta.env.BASE_URL}images/ismayilli-cottage.webp`, bookingCount: 2 },
 ].map((home) => ({ ...home, description: 'Demo broker evi üçün qısa təsvir.', address: 'Demo ünvan', roomCount: 3, media: home.mainImageUrl ? [{ id: home.id * 100, url: home.mainImageUrl, type: 'HomeImage', isMain: true, sortOrder: 0, contentType: 'image/webp' }] : [], availabilityBlocks: [], upcomingBookingCount: home.bookingCount, createdAt: new Date().toISOString(), updatedAt: null }))
+
+mockHomes[0].availabilityBlocks = [
+  { id: 6101, startDate: '2026-07-22', endDate: '2026-07-24', note: 'Ailə istifadəsi', createdAt: '2026-07-01T09:00:00Z' },
+]
 
 let mockBookings: BrokerBooking[] = [
   { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false, hasPendingCancellationRequest: true },
@@ -441,6 +456,12 @@ export async function deleteBrokerAvailabilityBlock(id: number, blockId: number,
   return request<{ id: number }>(`/api/broker/rental-homes/${id}/availability-blocks/${blockId}`, token, { method: 'DELETE' })
 }
 
+export async function getBrokerCalendarEvents(token: string, from: string, to: string): Promise<BrokerCalendarEvent[]> {
+  if (!useLiveApi) return getMockBrokerCalendarEvents(from, to)
+  const search = new URLSearchParams({ from, to })
+  return request(`/api/broker/calendar?${search}`, token)
+}
+
 export async function getBrokerBookings(token: string, filters: BrokerBookingFilters = {}): Promise<BrokerBooking[]> {
   if (!useLiveApi) return applyMockBrokerBookingFilters(mockBookings, filters)
   const search = new URLSearchParams()
@@ -663,4 +684,35 @@ function applyMockBrokerBookingFilters(bookings: BrokerBooking[], filters: Broke
     }
     return true
   })
+}
+
+function getMockBrokerCalendarEvents(from: string, to: string): BrokerCalendarEvent[] {
+  const bookingEvents = mockBookings
+    .filter((booking) => mockBookingDates(booking).some((date) => date >= from && date <= to))
+    .map((booking) => ({
+      bookingId: booking.bookingId,
+      rentalHomeId: booking.rentalHomeId,
+      rentalHomeTitle: booking.rentalHomeTitle,
+      startDate: booking.firstDate ?? '',
+      endDate: booking.lastDate ?? booking.firstDate ?? '',
+      bookingStatus: booking.statusCode,
+      customerName: booking.customerName,
+      eventType: 'booking' as const,
+    }))
+
+  const blockEvents = mockHomes.flatMap((home) => home.availabilityBlocks
+    .filter((block) => block.startDate <= to && block.endDate >= from)
+    .map((block) => ({
+      bookingId: null,
+      rentalHomeId: home.id,
+      rentalHomeTitle: home.title,
+      startDate: block.startDate,
+      endDate: block.endDate,
+      bookingStatus: null,
+      customerName: null,
+      eventType: 'manual-block' as const,
+    })))
+
+  return [...bookingEvents, ...blockEvents].sort((left, right) =>
+    left.startDate.localeCompare(right.startDate) || left.eventType.localeCompare(right.eventType))
 }

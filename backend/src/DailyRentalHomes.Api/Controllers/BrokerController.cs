@@ -134,6 +134,80 @@ public sealed class BrokerController : ControllerBase
         return Ok(ApiResponse<IReadOnlyList<BrokerBookingListItemResponse>>.Ok(items));
     }
 
+    [HttpGet("calendar")]
+    public async Task<IActionResult> GetCalendar(
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
+        CancellationToken cancellationToken)
+    {
+        if (!from.HasValue || !to.HasValue)
+        {
+            return BadRequest(ApiResponse<object>.Fail("The from and to query parameters are required."));
+        }
+
+        if (from > to)
+        {
+            return BadRequest(ApiResponse<object>.Fail("The from date must not be after the to date."));
+        }
+
+        var bookings = await ScopeBookings(_db.Bookings.AsNoTracking())
+            .Include(booking => booking.RentalHome)
+            .Include(booking => booking.Status)
+            .Include(booking => booking.Dates)
+            .Where(booking => booking.Dates.Any(date => date.Date >= from.Value && date.Date <= to.Value))
+            .ToListAsync(cancellationToken);
+
+        var bookingEvents = bookings
+            .Select(booking =>
+            {
+                var dates = booking.Dates.OrderBy(date => date.Date).Select(date => date.Date).ToList();
+                return new BrokerCalendarEventResponse(
+                    booking.Id,
+                    booking.RentalHomeId,
+                    booking.RentalHome?.Title ?? string.Empty,
+                    dates[0],
+                    dates[^1],
+                    booking.Status?.Code ?? string.Empty,
+                    booking.CustomerFullName,
+                    "booking");
+            })
+            .ToList();
+
+        var scopedHomes = await ScopeHomes(_db.RentalHomes.AsNoTracking())
+            .Select(home => new { home.Id, home.Title })
+            .ToListAsync(cancellationToken);
+        var scopedHomeTitles = scopedHomes.ToDictionary(home => home.Id, home => home.Title);
+        var scopedHomeIds = scopedHomeTitles.Keys.ToList();
+
+        var manualBlocks = await _db.RentalHomeAvailabilityBlocks.AsNoTracking()
+            .Where(block => scopedHomeIds.Contains(block.RentalHomeId) &&
+                            !block.IsDeleted &&
+                            block.StartDate <= to.Value &&
+                            block.EndDate >= from.Value)
+            .ToListAsync(cancellationToken);
+
+        var manualBlockEvents = manualBlocks
+            .Select(block => new BrokerCalendarEventResponse(
+                null,
+                block.RentalHomeId,
+                scopedHomeTitles.GetValueOrDefault(block.RentalHomeId, string.Empty),
+                block.StartDate,
+                block.EndDate,
+                null,
+                null,
+                "manual-block"))
+            .ToList();
+
+        var events = bookingEvents
+            .Concat(manualBlockEvents)
+            .OrderBy(item => item.StartDate)
+            .ThenBy(item => item.EventType)
+            .ThenBy(item => item.RentalHomeTitle)
+            .ToList();
+
+        return Ok(ApiResponse<IReadOnlyList<BrokerCalendarEventResponse>>.Ok(events));
+    }
+
     [HttpGet("bookings/{id:long}")]
     public async Task<IActionResult> GetBookingById(long id, CancellationToken cancellationToken)
     {

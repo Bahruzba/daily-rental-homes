@@ -130,6 +130,75 @@ public sealed class BrokerControllerTests
     }
 
     [Fact]
+    public async Task CalendarReturnsOnlyOwnEvents()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 12), new DateOnly(2026, 8, 13)));
+        context.RentalHomeAvailabilityBlocks.Add(Block(302, 102, new DateOnly(2026, 8, 12), new DateOnly(2026, 8, 13)));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetCalendar(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31), default);
+        var events = GetData<IReadOnlyList<BrokerCalendarEventResponse>>(result);
+
+        Assert.All(events, item => Assert.Equal(101, item.RentalHomeId));
+        Assert.Contains(events, item => item.BookingId == 1001 && item.EventType == "booking");
+        Assert.Contains(events, item => item.EventType == "manual-block");
+        Assert.DoesNotContain(events, item => item.RentalHomeId == 102);
+    }
+
+    [Fact]
+    public async Task CalendarDateRangeFilterWorks()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 20), new DateOnly(2026, 8, 21)));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetCalendar(new DateOnly(2026, 8, 20), new DateOnly(2026, 8, 21), default);
+        var events = GetData<IReadOnlyList<BrokerCalendarEventResponse>>(result);
+
+        var calendarEvent = Assert.Single(events);
+        Assert.Equal("manual-block", calendarEvent.EventType);
+        Assert.Equal(new DateOnly(2026, 8, 20), calendarEvent.StartDate);
+    }
+
+    [Fact]
+    public async Task CalendarIncludesManualBlocks()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3)));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetCalendar(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31), default);
+        var events = GetData<IReadOnlyList<BrokerCalendarEventResponse>>(result);
+
+        var block = Assert.Single(events, item => item.EventType == "manual-block");
+        Assert.Null(block.BookingId);
+        Assert.Equal(101, block.RentalHomeId);
+        Assert.Equal("Broker One Home", block.RentalHomeTitle);
+    }
+
+    [Fact]
+    public async Task CalendarHidesAnotherBrokersData()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 102, new DateOnly(2026, 9, 2), new DateOnly(2026, 9, 3)));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetCalendar(new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30), default);
+        var events = GetData<IReadOnlyList<BrokerCalendarEventResponse>>(result);
+
+        Assert.Empty(events);
+    }
+
+    [Fact]
     public async Task BrokerCannotSeeAnotherBrokersBooking()
     {
         await using var context = CreateContext();
@@ -520,6 +589,15 @@ public sealed class BrokerControllerTests
         RequestedByUserId = 30,
         StatusCode = "pending",
         Reason = "Customer plans changed"
+    };
+
+    private static RentalHomeAvailabilityBlock Block(long id, long homeId, DateOnly startDate, DateOnly endDate) => new()
+    {
+        Id = id,
+        RentalHomeId = homeId,
+        StartDate = startDate,
+        EndDate = endDate,
+        Note = "Owner stay"
     };
 
     private static BrokerController CreateController(AppDbContext context, long brokerId)
