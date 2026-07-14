@@ -17,6 +17,13 @@ namespace DailyRentalHomes.Api.Controllers;
 [Route("api/broker/bookings/{bookingId:long}/deposit")]
 public sealed class BrokerDepositsController : ControllerBase
 {
+    private static readonly HashSet<string> DeadlineExtensionBlockedBookingStatuses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        BookingStatusCodes.Cancelled,
+        BookingStatusCodes.Completed,
+        BookingStatusCodes.Rejected
+    };
+
     private readonly AppDbContext _db;
     private readonly INotificationOutboxService _notifications;
 
@@ -117,6 +124,64 @@ public sealed class BrokerDepositsController : ControllerBase
         await _notifications.QueueDepositRequestedAsync(booking, deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
         return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit)));
+    }
+
+    [HttpPost("extend-deadline")]
+    public async Task<IActionResult> ExtendDeadline(
+        long bookingId,
+        ExtendDepositDeadlineRequest input,
+        CancellationToken cancellationToken)
+    {
+        var reason = TextRules.CleanOptional(input.Reason);
+        if (reason?.Length > 500)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Deposit deadline extension reason must be 500 characters or less."));
+        }
+
+        var now = DateTime.UtcNow;
+        if (input.DeadlineAt <= now)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Deposit deadline must be in the future."));
+        }
+
+        var booking = await GetBookingWithDeposit(bookingId, cancellationToken);
+        if (booking is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Booking or deposit not found."));
+        }
+
+        var deposit = booking.Deposit!;
+        if (!deposit.DeadlineAt.HasValue || input.DeadlineAt <= deposit.DeadlineAt.Value)
+        {
+            return BadRequest(ApiResponse<object>.Fail("New deposit deadline must be later than the current deadline."));
+        }
+
+        if (deposit.Status == BookingDepositStatus.Paid)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Approved deposits cannot be extended."));
+        }
+
+        if (DeadlineExtensionBlockedBookingStatuses.Contains(booking.Status?.Code ?? string.Empty))
+        {
+            return BadRequest(ApiResponse<object>.Fail("Deposit deadline cannot be extended for the current booking status."));
+        }
+
+        var userId = User.GetUserId();
+        deposit.DeadlineAt = input.DeadlineAt;
+        deposit.DeadlineExtendedAt = now;
+        deposit.DeadlineExtendedByUserId = userId;
+        deposit.DeadlineExtensionReason = reason;
+        deposit.UpdatedByUserId = userId;
+
+        await _notifications.QueueDepositDeadlineExtendedAsync(booking, deposit, cancellationToken);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<ExtendDepositDeadlineResponse>.Ok(new ExtendDepositDeadlineResponse(
+            booking.Id,
+            deposit.Id,
+            deposit.DeadlineAt.Value,
+            deposit.DeadlineExtendedAt.Value,
+            deposit.DeadlineExtensionReason)));
     }
 
     [HttpPost("approve")]

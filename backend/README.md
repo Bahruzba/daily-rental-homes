@@ -272,6 +272,7 @@ MVP limits: no private object storage, image resizing/compression, malware scan,
 Broker endpoints (Broker or Admin JWT, ownership-scoped for Broker):
 
 - POST /api/broker/bookings/{bookingId}/deposit/request
+- POST /api/broker/bookings/{bookingId}/deposit/extend-deadline
 - POST /api/broker/bookings/{bookingId}/deposit/approve
 - POST /api/broker/bookings/{bookingId}/deposit/reject
 
@@ -285,6 +286,19 @@ Customer endpoints (Customer JWT, matched by booking customer/user or verified p
 Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Customer account booking list/detail responses include booking status, selected dates, total amount, rental home city/district/main image, and deposit instructions when available. Customer-visible deposit data includes amount, deadline, status, card holder, masked PAN, bank name, broker instruction note, uploaded receipt, review note, and `allowReupload`; broker-only private availability notes are not exposed.
 
 Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Customers can upload only for bookings matched to their account/user or verified phone. Upload is allowed only when the deposit is waiting for a receipt, or when it was rejected with `allowReupload = true`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+
+Broker/Admin users can extend a requested deposit deadline with `POST /api/broker/bookings/{bookingId}/deposit/extend-deadline`:
+
+```json
+{
+  "deadlineAt": "2026-07-20T18:00:00Z",
+  "reason": "Müştəri əlavə vaxt istədi"
+}
+```
+
+The booking and deposit must exist in the broker ownership scope. The new deadline must be in the future and later than the current deadline. `reason` is optional and limited to 500 characters. Approved deposits cannot be extended, and bookings in `cancelled`, `completed`, or `rejected` status reject the request. Extending a deadline updates only deposit deadline metadata (`deadlineAt`, `deadlineExtendedAt`, `deadlineExtendedByUserId`, `deadlineExtensionReason`); it does not change booking status, deposit amount, deposit approval status, availability, refunds, or payment state.
+
+Successful extensions queue one customer notification outbox record with type `deposit_deadline_extended`, title `Beh müddəti uzadıldı`, and a message containing the new deadline plus the reason when provided. This PR does not add automatic refund, automatic booking cancellation, reminder worker changes, real message sending, or frontend UI.
 
 Customer cancellation requests are stored in `booking_cancellation_requests`. `POST /api/account/bookings/{id}/cancellation-requests` accepts optional JSON `{ "reason": "..." }`; reason is limited to 1000 characters. Customers can request cancellation only for their own active bookings in `pending`, `waiting_deposit`, `confirmed`, or `paid`. `completed`, `rejected`, and `cancelled` bookings return `400 Bad Request`. If the booking is not owned by the customer, the API returns the existing not-found behavior. A duplicate active `pending` cancellation request returns `400 Bad Request` with a readable message.
 

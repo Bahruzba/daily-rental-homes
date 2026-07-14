@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Account;
 using DailyRentalHomes.Api.Contracts.Bookings;
+using DailyRentalHomes.Api.Contracts.Broker;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Controllers;
 using DailyRentalHomes.Api.Security;
@@ -318,6 +319,227 @@ public sealed class DepositFlowControllerTests
         Assert.Contains("date conflict", Assert.IsType<ApiResponse<object>>(badRequest.Value).Error, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task OwnerBrokerCanExtendDepositDeadline()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var controller = BrokerController(context, 10);
+        var newDeadline = DateTime.UtcNow.AddDays(5);
+
+        var response = GetData<ExtendDepositDeadlineResponse>(await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = newDeadline, Reason = "Müştəri əlavə vaxt istədi" },
+            default));
+
+        Assert.Equal(1001, response.BookingId);
+        Assert.Equal(501, response.DepositId);
+        Assert.Equal(newDeadline, response.DeadlineAt);
+        Assert.Equal("Müştəri əlavə vaxt istədi", response.DeadlineExtensionReason);
+        Assert.True(response.DeadlineExtendedAt <= DateTime.UtcNow);
+        var deposit = await context.BookingDeposits.SingleAsync();
+        Assert.Equal(10, deposit.DeadlineExtendedByUserId);
+    }
+
+    [Fact]
+    public async Task AnotherBrokerCannotExtendDepositDeadline()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1003);
+        var controller = BrokerController(context, 10);
+
+        var result = await controller.ExtendDeadline(
+            1003,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task MissingBookingOrDepositReturnsNotFoundWhenExtendingDeadline()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = BrokerController(context, 10);
+
+        var missingBooking = await controller.ExtendDeadline(
+            9999,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+        var missingDeposit = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+
+        Assert.IsType<NotFoundObjectResult>(missingBooking);
+        Assert.IsType<NotFoundObjectResult>(missingDeposit);
+    }
+
+    [Fact]
+    public async Task ExtendedDepositDeadlineMustBeInFutureAndLaterThanCurrentDeadline()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var controller = BrokerController(context, 10);
+        var currentDeadline = (await context.BookingDeposits.SingleAsync()).DeadlineAt!.Value;
+
+        var past = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddMinutes(-1) },
+            default);
+        var earlierThanCurrent = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = currentDeadline.AddMinutes(-1) },
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(past);
+        Assert.IsType<BadRequestObjectResult>(earlierThanCurrent);
+    }
+
+    [Fact]
+    public async Task ApprovedDepositCannotBeExtended()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var deposit = await context.BookingDeposits.SingleAsync();
+        deposit.Status = BookingDepositStatus.Paid;
+        await context.SaveChangesAsync();
+        var controller = BrokerController(context, 10);
+
+        var result = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public async Task CancelledCompletedRejectedBookingsCannotExtendDepositDeadline(long statusId)
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var booking = await context.Bookings.SingleAsync(item => item.Id == 1001);
+        booking.StatusId = statusId;
+        await context.SaveChangesAsync();
+        var controller = BrokerController(context, 10);
+
+        var result = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeadlineExtensionReasonMaxLengthValidationReturnsBadRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var controller = BrokerController(context, 10);
+
+        var result = await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5), Reason = new string('x', 501) },
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task DeadlineExtensionDoesNotChangeBookingStatusOrDepositAmountOrStatus()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var controller = BrokerController(context, 10);
+
+        await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5) },
+            default);
+
+        var booking = await context.Bookings.SingleAsync(item => item.Id == 1001);
+        var deposit = await context.BookingDeposits.SingleAsync();
+        Assert.Equal(2, booking.StatusId);
+        Assert.Equal(100, deposit.Amount);
+        Assert.Equal(BookingDepositStatus.Waiting, deposit.Status);
+    }
+
+    [Fact]
+    public async Task DeadlineExtensionQueuesCustomerNotification()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        context.OutboundMessages.RemoveRange(context.OutboundMessages);
+        await context.SaveChangesAsync();
+        var controller = BrokerController(context, 10);
+
+        await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5), Reason = "Müştəri əlavə vaxt istədi" },
+            default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(NotificationTypeCodes.DepositDeadlineExtended, message.TypeCode);
+        Assert.Equal("Beh müddəti uzadıldı", message.Title);
+        Assert.Equal(30, message.RecipientUserId);
+        Assert.Contains("Müştəri əlavə vaxt istədi", message.Text);
+    }
+
+    [Fact]
+    public async Task BrokerDetailReturnsDepositDeadlineExtensionFields()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var controller = BrokerController(context, 10);
+        await controller.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5), Reason = "Extra time" },
+            default);
+        var detailController = BrokerBookingsController(context, 10);
+
+        var detail = GetData<BrokerBookingDetailResponse>(await detailController.GetBookingById(1001, default));
+
+        Assert.NotNull(detail.Deposit);
+        Assert.NotNull(detail.Deposit.DeadlineExtendedAt);
+        Assert.Equal("Extra time", detail.Deposit.DeadlineExtensionReason);
+    }
+
+    [Fact]
+    public async Task CustomerDetailReturnsDepositDeadlineExtensionFields()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        await AddRequestedDeposit(context, 1001);
+        var broker = BrokerController(context, 10);
+        await broker.ExtendDeadline(
+            1001,
+            new ExtendDepositDeadlineRequest { DeadlineAt = DateTime.UtcNow.AddDays(5), Reason = "Extra time" },
+            default);
+        var environment = TestEnvironment.Create();
+        var controller = AccountController(context, environment, 30);
+
+        var detail = GetData<AccountBookingDetailResponse>(await controller.GetBookingById(1001, default));
+
+        Assert.NotNull(detail.Deposit);
+        Assert.NotNull(detail.Deposit.DeadlineExtendedAt);
+        Assert.Equal("Extra time", detail.Deposit.DeadlineExtensionReason);
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
@@ -330,7 +552,9 @@ public sealed class DepositFlowControllerTests
             new BookingStatus { Id = 1, Name = "Pending", Code = BookingStatusCodes.Pending, SortOrder = 1 },
             new BookingStatus { Id = 2, Name = "WaitingDeposit", Code = BookingStatusCodes.WaitingDeposit, SortOrder = 2 },
             new BookingStatus { Id = 3, Name = "Confirmed", Code = BookingStatusCodes.Confirmed, SortOrder = 3 },
-            new BookingStatus { Id = 4, Name = "Cancelled", Code = BookingStatusCodes.Cancelled, SortOrder = 4 });
+            new BookingStatus { Id = 4, Name = "Cancelled", Code = BookingStatusCodes.Cancelled, SortOrder = 4 },
+            new BookingStatus { Id = 5, Name = "Rejected", Code = BookingStatusCodes.Rejected, SortOrder = 5 },
+            new BookingStatus { Id = 6, Name = "Completed", Code = BookingStatusCodes.Completed, SortOrder = 6 });
         context.Users.AddRange(
             User(10, "+994501000010", UserRole.Broker, "Broker One"),
             User(20, "+994501000020", UserRole.Broker, "Broker Two"),
@@ -382,6 +606,11 @@ public sealed class DepositFlowControllerTests
     }
 
     private static BrokerDepositsController BrokerController(AppDbContext context, long userId) => new(context, new NotificationOutboxService(context))
+    {
+        ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Broker) } }
+    };
+
+    private static DailyRentalHomes.Api.Controllers.BrokerController BrokerBookingsController(AppDbContext context, long userId) => new(context, new NotificationOutboxService(context))
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Broker) } }
     };

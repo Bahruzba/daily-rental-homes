@@ -71,6 +71,20 @@ public sealed class NotificationOutboxService : INotificationOutboxService
         return Task.CompletedTask;
     }
 
+    public Task QueueDepositDeadlineExtendedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
+    {
+        var message = $"Rezervasiya üçün beh göndərmə müddəti {deposit.DeadlineAt:dd.MM.yyyy HH:mm} tarixinədək uzadıldı.";
+        if (!string.IsNullOrWhiteSpace(deposit.DeadlineExtensionReason))
+        {
+            message += $" Səbəb: {deposit.DeadlineExtensionReason}";
+        }
+
+        Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
+            NotificationTypeCodes.DepositDeadlineExtended, "Beh müddəti uzadıldı",
+            message, booking, deposit, DateTime.UtcNow);
+        return Task.CompletedTask;
+    }
+
     public async Task QueueDepositReceiptUploadedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
     {
         var broker = await BrokerFor(booking, cancellationToken);
