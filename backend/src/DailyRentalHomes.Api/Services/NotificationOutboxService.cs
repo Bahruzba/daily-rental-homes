@@ -31,6 +31,27 @@ public sealed class NotificationOutboxService : INotificationOutboxService
             booking, booking.Deposit, DateTime.UtcNow);
     }
 
+    public Task QueueBookingCancellationApprovedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken)
+    {
+        Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
+            NotificationTypeCodes.BookingCancellationApproved,
+            "LÉ™ÄŸv sorÄŸusu tÉ™sdiqlÉ™ndi",
+            $"Rezervasiya #{booking.Id} Ã¼zrÉ™ lÉ™ÄŸv sorÄŸunuz tÉ™sdiqlÉ™ndi vÉ™ rezervasiya lÉ™ÄŸv edildi.",
+            booking, booking.Deposit, DateTime.UtcNow);
+        return Task.CompletedTask;
+    }
+
+    public Task QueueBookingCancellationRejectedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken)
+    {
+        var note = string.IsNullOrWhiteSpace(request.DecisionNote) ? string.Empty : $" Broker qeydi: {request.DecisionNote}";
+        Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
+            NotificationTypeCodes.BookingCancellationRejected,
+            "LÉ™ÄŸv sorÄŸusu rÉ™dd edildi",
+            $"Rezervasiya #{booking.Id} Ã¼zrÉ™ lÉ™ÄŸv sorÄŸunuz rÉ™dd edildi.{note}",
+            booking, booking.Deposit, DateTime.UtcNow);
+        return Task.CompletedTask;
+    }
+
     public Task QueueDepositRequestedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
     {
         Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,

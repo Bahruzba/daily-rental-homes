@@ -133,8 +133,140 @@ public sealed class BrokerControllerTests
 
         Assert.NotNull(detail.CancellationRequest);
         Assert.Equal(501, detail.CancellationRequest.Id);
+        Assert.Equal(1001, detail.CancellationRequest.BookingId);
         Assert.Equal("pending", detail.CancellationRequest.StatusCode);
         Assert.Equal("Customer plans changed", detail.CancellationRequest.Reason);
+    }
+
+    [Fact]
+    public async Task OwnerBrokerCanApproveCancellationRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1001));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var response = GetData<BrokerCancellationRequestResponse>(await controller.ApproveCancellationRequest(
+            1001,
+            501,
+            new BrokerCancellationDecisionRequest { Note = "Approved by broker" },
+            default));
+
+        Assert.Equal("approved", response.StatusCode);
+        Assert.Equal("Approved by broker", response.DecisionNote);
+        Assert.NotNull(response.DecidedAt);
+        var booking = await context.Bookings.SingleAsync(item => item.Id == 1001);
+        Assert.Equal(4, booking.StatusId);
+        var history = await context.BookingStatusHistory.SingleAsync();
+        Assert.Equal(1, history.OldStatusId);
+        Assert.Equal(4, history.NewStatusId);
+        Assert.Equal("Approved by broker", history.Note);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item =>
+            item.TypeCode == NotificationTypeCodes.BookingCancellationApproved &&
+            item.BookingId == 1001);
+    }
+
+    [Fact]
+    public async Task OwnerBrokerCanRejectCancellationRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1001));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var response = GetData<BrokerCancellationRequestResponse>(await controller.RejectCancellationRequest(
+            1001,
+            501,
+            new BrokerCancellationDecisionRequest { Note = "Dates still reserved" },
+            default));
+
+        Assert.Equal("rejected", response.StatusCode);
+        Assert.Equal("Dates still reserved", response.DecisionNote);
+        Assert.Equal(1, (await context.Bookings.SingleAsync(item => item.Id == 1001)).StatusId);
+        Assert.Empty(await context.BookingStatusHistory.ToListAsync());
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item =>
+            item.TypeCode == NotificationTypeCodes.BookingCancellationRejected &&
+            item.BookingId == 1001 &&
+            item.Text.Contains("Dates still reserved"));
+    }
+
+    [Fact]
+    public async Task AnotherBrokerCannotDecideCancellationRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1002));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.ApproveCancellationRequest(1002, 501, null, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal("pending", (await context.BookingCancellationRequests.SingleAsync(item => item.Id == 501)).StatusCode);
+    }
+
+    [Fact]
+    public async Task DuplicateCancellationDecisionIsRejected()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(new BookingCancellationRequest
+        {
+            Id = 501,
+            BookingId = 1001,
+            RequestedByUserId = 30,
+            StatusCode = "approved"
+        });
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.RejectCancellationRequest(1001, 501, null, default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CancellationDecisionNoteMaxLengthValidationReturnsBadRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1001));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.ApproveCancellationRequest(
+            1001,
+            501,
+            new BrokerCancellationDecisionRequest { Note = new string('x', 1001) },
+            default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Equal("pending", (await context.BookingCancellationRequests.SingleAsync(item => item.Id == 501)).StatusCode);
+    }
+
+    [Fact]
+    public async Task ApprovedCancellationRequestNoLongerBlocksPublicAvailability()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1001));
+        await context.SaveChangesAsync();
+        var brokerController = CreateController(context, brokerId: 10);
+        await brokerController.ApproveCancellationRequest(1001, 501, null, default);
+        var publicBookingsController = new BookingsController(context, new NotificationOutboxService(context));
+
+        var result = await publicBookingsController.Create(new NewBookingRequest
+        {
+            RentalHomeId = 101,
+            Name = "Next Customer",
+            Phone = "+994501111199",
+            Guests = 2,
+            Dates = [new DateOnly(2026, 8, 10)]
+        }, default);
+
+        Assert.IsType<OkObjectResult>(result);
     }
 
     [Fact]
@@ -287,7 +419,8 @@ public sealed class BrokerControllerTests
         context.BookingStatuses.AddRange(pending, waiting, confirmed, cancelled, rejected);
         context.Users.AddRange(
             new User { Id = 10, FullName = "Broker One", PhoneNumber = "+994501000010", Role = UserRole.Broker },
-            new User { Id = 20, FullName = "Broker Two", PhoneNumber = "+994501000020", Role = UserRole.Broker });
+            new User { Id = 20, FullName = "Broker Two", PhoneNumber = "+994501000020", Role = UserRole.Broker },
+            new User { Id = 30, FullName = "Customer One", PhoneNumber = "+994501234567", Role = UserRole.Customer });
         context.RentalHomes.AddRange(
             Home(101, 10, "Broker One Home"),
             Home(102, 20, "Broker Two Home"));
@@ -323,6 +456,15 @@ public sealed class BrokerControllerTests
         StatusId = statusId,
         CustomerNote = "Test note",
         Dates = dates.Select(date => new BookingDate { Date = date }).ToList()
+    };
+
+    private static BookingCancellationRequest PendingCancellationRequest(long id, long bookingId) => new()
+    {
+        Id = id,
+        BookingId = bookingId,
+        RequestedByUserId = 30,
+        StatusCode = "pending",
+        Reason = "Customer plans changed"
     };
 
     private static BrokerController CreateController(AppDbContext context, long brokerId)

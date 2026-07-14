@@ -132,9 +132,12 @@ export type BrokerBookingDetail = {
 
 export type BrokerCancellationRequest = {
   id: number
+  bookingId: number
   statusCode: string
   reason?: string | null
+  decisionNote?: string | null
   createdAt: string
+  decidedAt?: string | null
 }
 
 export type DepositInfo = {
@@ -231,6 +234,7 @@ function persistMockExpenses() { window.localStorage.setItem(mockExpenseStorageK
 const mockCancellationRequests: Record<number, BrokerCancellationRequest | undefined> = {
   1001: {
     id: 7001,
+    bookingId: 1001,
     statusCode: 'pending',
     reason: 'Plan dəyişdi, mümkün olsa rezervasiyanı ləğv etmək istəyirik.',
     createdAt: '2026-07-08T09:30:00Z',
@@ -534,6 +538,33 @@ export function rejectBrokerBooking(id: number, token: string, note?: string) {
 
 export function cancelBrokerBooking(id: number, token: string, note?: string) {
   return runBrokerBookingAction(id, 'cancel', token, note)
+}
+
+export async function approveBrokerCancellationRequest(bookingId: number, requestId: number, token: string, note?: string): Promise<BrokerCancellationRequest> {
+  if (!useLiveApi) {
+    const request = mockCancellationRequests[bookingId]
+    const booking = mockBookings.find((item) => item.bookingId === bookingId)
+    if (!request || request.id !== requestId || !booking) throw new BrokerRequestError('LÉ™ÄŸv sorÄŸusu tapÄ±lmadÄ±.')
+    const decidedAt = new Date().toISOString()
+    const response: BrokerCancellationRequest = { ...request, statusCode: 'approved', decisionNote: note || null, decidedAt }
+    delete mockCancellationRequests[bookingId]
+    booking.statusCode = 'cancelled'
+    booking.statusName = 'Cancelled'
+    booking.isDepositPending = false
+    return response
+  }
+  return request<BrokerCancellationRequest>(`/api/broker/bookings/${bookingId}/cancellation-requests/${requestId}/approve`, token, { method: 'POST', body: JSON.stringify({ note }) })
+}
+
+export async function rejectBrokerCancellationRequest(bookingId: number, requestId: number, token: string, note?: string): Promise<BrokerCancellationRequest> {
+  if (!useLiveApi) {
+    const request = mockCancellationRequests[bookingId]
+    if (!request || request.id !== requestId) throw new BrokerRequestError('LÉ™ÄŸv sorÄŸusu tapÄ±lmadÄ±.')
+    const response: BrokerCancellationRequest = { ...request, statusCode: 'rejected', decisionNote: note || null, decidedAt: new Date().toISOString() }
+    delete mockCancellationRequests[bookingId]
+    return response
+  }
+  return request<BrokerCancellationRequest>(`/api/broker/bookings/${bookingId}/cancellation-requests/${requestId}/reject`, token, { method: 'POST', body: JSON.stringify({ note }) })
 }
 
 export async function getBrokerBookingExpenses(bookingId: number, token: string): Promise<BrokerBookingExpense[]> {
