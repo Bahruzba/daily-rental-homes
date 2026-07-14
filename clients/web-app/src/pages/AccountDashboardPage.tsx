@@ -1,5 +1,5 @@
 import { CalendarDays, CreditCard, RefreshCw } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getAccountBookings, type AccountBooking } from '../api/account'
 import { resolveApiAssetUrl } from '../api/broker'
@@ -8,6 +8,22 @@ import { AppLayout } from '../components/AppLayout'
 import { EmptyState } from '../components/EmptyState'
 
 const money = new Intl.NumberFormat('az-AZ', { style: 'currency', currency: 'AZN' })
+const customerBookingFilterStorageKey = 'daily-homes-customer-booking-filters'
+
+type CustomerBookingFilters = {
+  status: string
+}
+
+function readCustomerBookingFilters(): CustomerBookingFilters {
+  try {
+    const saved = window.localStorage.getItem(customerBookingFilterStorageKey)
+    if (!saved) return { status: '' }
+    const parsed = JSON.parse(saved) as Partial<CustomerBookingFilters>
+    return { status: typeof parsed.status === 'string' ? parsed.status : '' }
+  } catch {
+    return { status: '' }
+  }
+}
 
 const bookingLabels: Record<string, string> = {
   pending: 'Broker təsdiqi gözlənilir',
@@ -40,6 +56,7 @@ function nextAction(booking: AccountBooking) {
 export function AccountDashboardPage() {
   const { session } = useAuth()
   const [bookings, setBookings] = useState<AccountBooking[]>([])
+  const [statusFilter, setStatusFilter] = useState(() => readCustomerBookingFilters().status)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -61,6 +78,24 @@ export function AccountDashboardPage() {
     void load()
   }, [session?.accessToken])
 
+  useEffect(() => {
+    if (!statusFilter) {
+      window.localStorage.removeItem(customerBookingFilterStorageKey)
+      return
+    }
+    window.localStorage.setItem(customerBookingFilterStorageKey, JSON.stringify({ status: statusFilter }))
+  }, [statusFilter])
+
+  const resetFilters = () => {
+    setStatusFilter('')
+    window.localStorage.removeItem(customerBookingFilterStorageKey)
+    void load()
+  }
+
+  const filteredBookings = useMemo(
+    () => statusFilter ? bookings.filter((booking) => booking.statusCode === statusFilter) : bookings,
+    [bookings, statusFilter])
+
   return (
     <AppLayout>
       <section className="account-page">
@@ -78,11 +113,24 @@ export function AccountDashboardPage() {
 
           {error && <div className="broker-error" role="alert">{error}</div>}
 
+          <div className="account-booking-filters">
+            <label>
+              <span>Status</span>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                <option value="">Hamısı</option>
+                {Object.entries(bookingLabels).map(([value, label]) => (
+                  <option value={value} key={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+            <button className="button button-ghost" onClick={resetFilters} disabled={loading}>Filtrləri sıfırla</button>
+          </div>
+
           {loading ? (
             <div className="broker-loading">Rezervasiyalar yüklənir…</div>
-          ) : bookings.length ? (
+          ) : filteredBookings.length ? (
             <div className="account-bookings-grid">
-              {bookings.map((booking) => (
+              {filteredBookings.map((booking) => (
                 <Link to={`/account/bookings/${booking.bookingId}`} key={booking.bookingId}>
                   {booking.mainImageUrl && <img className="account-booking-thumb" src={resolveApiAssetUrl(booking.mainImageUrl)} alt={booking.rentalHomeTitle} />}
                   <div>
@@ -100,6 +148,8 @@ export function AccountDashboardPage() {
                 </Link>
               ))}
             </div>
+          ) : bookings.length ? (
+            <EmptyState title="Bu filterlərə uyğun rezervasiya tapılmadı." description="Filtrləri sıfırlayıb yenidən yoxlayın." />
           ) : (
             <EmptyState title="Rezervasiya yoxdur" description="Telefon nömrənizə bağlı rezervasiyalar burada görünəcək." />
           )}

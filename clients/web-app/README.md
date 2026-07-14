@@ -74,6 +74,8 @@ Customer-visible status davranışı:
 
 Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunur. Live rejimdə frontend `/api/account/bookings`, `/api/account/bookings/{id}` və `/api/account/bookings/{id}/deposit/receipt` endpoint-lərini çağırır.
 
+Customer `/account` rezervasiya siyahısında status filteri var. Seçilmiş status localStorage-da `daily-homes-customer-booking-filters` açarı ilə saxlanılır və müştəri səhifəyə qayıdanda bərpa olunur. `Filtrləri sıfırla` düyməsi UI filterini təmizləyir, saxlanmış dəyəri silir və tam rezervasiya siyahısını yenidən yükləyir. Mock və live rejimlərdə filter frontend-də yüklənmiş siyahı üzərində tətbiq olunur.
+
 Customer `/account/bookings/:id` səhifəsində aktiv rezervasiyalar üçün sadə ləğv sorğusu UI göstərilir. Göründüyü statuslar:
 
 - `pending`
