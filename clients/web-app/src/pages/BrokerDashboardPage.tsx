@@ -246,6 +246,9 @@ export function BrokerDashboardPage() {
             <button className="button button-ghost" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={16} /> Yenilə
             </button>
+            <Link className="button button-primary" to="/broker/calendar">
+              <CalendarDays size={16} /> Təqvim
+            </Link>
           </div>
 
           {error && (

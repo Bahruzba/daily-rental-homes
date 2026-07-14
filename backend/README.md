@@ -192,6 +192,7 @@ Invalid guest count, price ranges, one-sided date ranges, bad date format, or `s
 ### Broker dashboard
 
 - GET /api/broker/summary
+- GET /api/broker/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
 - GET /api/broker/rental-homes
 - GET /api/broker/bookings
 - GET /api/broker/bookings/{id}
@@ -215,6 +216,8 @@ Booking status lifecycle MVP:
 The generic broker status endpoint remains for backward compatibility and permits cancellation only. Deposit request/approval flow remains separate: accepting a booking does not automatically create a deposit, and requesting a deposit still moves an eligible booking to `waiting_deposit`. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
 Broker booking list (`GET /api/broker/bookings`) includes `hasPendingCancellationRequest`, which is `true` only when that booking has an active `pending` customer cancellation request. Approved, rejected, or otherwise resolved requests return `false`, and another broker's bookings remain hidden by the existing scope rules.
+
+Broker calendar (`GET /api/broker/calendar`) requires inclusive `from` and `to` query parameters. It returns broker-owned booking events and manual availability block events for the requested date range. Event rows include `bookingId`, `rentalHomeId`, `rentalHomeTitle`, `startDate`, `endDate`, `bookingStatus`, `customerName`, and `eventType` (`booking` or `manual-block`). Broker ownership scoping is the same as other broker endpoints; Admin can see all data through the existing Broker/Admin policy.
 
 Broker booking detail (`GET /api/broker/bookings/{id}`) includes a nullable `cancellationRequest` summary when the booking has an active pending customer cancellation request. The summary contains `id`, `bookingId`, `statusCode`, optional `reason`, optional `decisionNote`, `createdAt`, and nullable `decidedAt`. Pending cancellation requests can be decided through:
 

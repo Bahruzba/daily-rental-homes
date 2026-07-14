@@ -6,6 +6,7 @@ import { AccountDashboardPage } from './pages/AccountDashboardPage'
 import { AdminNotificationsPage } from './pages/AdminNotificationsPage'
 import { BookingPage } from './pages/BookingPage'
 import { BrokerBookingDetailPage } from './pages/BrokerBookingDetailPage'
+import { BrokerCalendarPage } from './pages/BrokerCalendarPage'
 import { BrokerDashboardPage } from './pages/BrokerDashboardPage'
 import { BrokerRentalHomeManagePage } from './pages/BrokerRentalHomeManagePage'
 import { HomePage } from './pages/HomePage'
@@ -33,6 +34,7 @@ export default function App() {
     <Route path="/admin" element={<ProtectedRoute roles={['Admin']}><RoleDashboardPage role="Admin" eyebrow="ADMİN PANELİ" title="İdarəetmə xülasəsi" description="Platformanın əsas idarəetmə bölmələri." items={adminItems} /></ProtectedRoute>} />
     <Route path="/admin/notifications" element={<ProtectedRoute roles={['Admin']}><AdminNotificationsPage /></ProtectedRoute>} />
     <Route path="/broker" element={<ProtectedRoute roles={['Broker']}><BrokerDashboardPage /></ProtectedRoute>} />
+    <Route path="/broker/calendar" element={<ProtectedRoute roles={['Broker']}><BrokerCalendarPage /></ProtectedRoute>} />
     <Route path="/broker/bookings/:id" element={<ProtectedRoute roles={['Broker']}><BrokerBookingDetailPage /></ProtectedRoute>} />
     <Route path="/broker/rental-homes/new" element={<ProtectedRoute roles={['Broker']}><BrokerRentalHomeManagePage /></ProtectedRoute>} />
     <Route path="/broker/rental-homes/:id/edit" element={<ProtectedRoute roles={['Broker']}><BrokerRentalHomeManagePage /></ProtectedRoute>} />

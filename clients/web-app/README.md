@@ -101,6 +101,8 @@ Live rejimdə status və tarix filterləri `GET /api/broker/bookings` endpoint-i
 
 Siyahı kartları booking ID, ev adı, müştəri adı/telefonu, tarix aralığı, gecə sayı, status və toplam məbləği göstərir. Status chip-ləri hazırda yüklənmiş nəticələrin qısa xülasəsidir; pagination və inkişaf etmiş axtarış bu mərhələyə daxil deyil.
 
+Broker dashboard-da `Təqvim` düyməsi `/broker/calendar` səhifəsini açır. Live rejimdə frontend `GET /api/broker/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` endpoint-indən ay görünüşü üçün rezervasiya və manual availability block eventlərini yükləyir. Booking eventinə klik mövcud booking detail səhifəsinə, manual block eventinə klik həmin property edit səhifəsinə aparır. Mock rejimdə təqvim mövcud demo booking və availability block məlumatlarından yaradılır.
+
 ## Broker ev idarəetməsi
 
 Broker panelində `Ev əlavə et` düyməsi `/broker/rental-homes/new` səhifəsini açır. Mövcud ev kartına klik `/broker/rental-homes/:id/edit` idarəetmə səhifəsinə aparır.
