@@ -58,6 +58,8 @@ Homepage/public listing filterləri:
 
 Filterlər URL query param-larında saxlanılır. Live rejimdə frontend bu param-ləri `GET /api/rental-homes` endpoint-inə göndərir. Mock rejimdə eyni əsas filterlər lokal demo data üzərində simulyasiya olunur. Tarix filterində yalnız bir tarix seçilərsə və ya başlanğıc bitişdən sonra olarsa, frontend API çağırmadan oxunaqlı xəta göstərir.
 
+Public ev siyahısında `Sırala` dropdown-u var: `Standart`, `Yeni elanlar`, `Qiymət (artan)`, `Qiymət (azalan)` və `Ad (A-Z)`. Sıralama frontend-də yüklənmiş nəticələr üzərində tətbiq olunur, mövcud search/filter dəyərlərini dəyişmir və seçilmiş dəyər localStorage-da `daily-homes-public-property-sort` açarı ilə saxlanılır. `Standart` seçimi sıralamanı sıfırlayır.
+
 Date availability davranışı backend qaydasına uyğundur: manual broker blokları və aktiv/blocking booking-lər seçilmiş tarix aralığında evi siyahıdan çıxarır. Rejected və cancelled booking-lər tarixləri bloklamır; pending booking-lər hələ mövcud qaydaya əsasən bloklayır.
 
 Customer `/account` səhifəsi müştərinin öz rezervasiyalarını kart formatında göstərir: ev adı, şəhər/rayon, tarix sayı, toplam məbləğ, booking statusu, beh/qəbz statusu və növbəti addım. `/account/bookings/:id` səhifəsi ev xülasəsi, seçilmiş tarixlər, qonaq sayı, qiymət, status izahı və beh məlumatlarını daha detallı göstərir.

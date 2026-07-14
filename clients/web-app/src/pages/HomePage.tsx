@@ -8,6 +8,9 @@ import { getRentalHomes, type RentalHomeFilters } from '../api/client'
 import type { RentalHome } from '../types'
 
 const filterKeys: Array<keyof RentalHomeFilters> = ['q', 'city', 'district', 'guests', 'minPrice', 'maxPrice', 'startDate', 'endDate']
+const sortStorageKey = 'daily-homes-public-property-sort'
+const sortOptions = ['', 'newest', 'price-asc', 'price-desc', 'name-asc'] as const
+type SortOption = typeof sortOptions[number]
 
 function filtersFromParams(params: URLSearchParams): RentalHomeFilters {
   return Object.fromEntries(filterKeys.map((key) => [key, params.get(key) ?? '']).filter(([, value]) => value)) as RentalHomeFilters
@@ -26,12 +29,32 @@ function hasFilters(filters: RentalHomeFilters) {
   return Object.values(filters).some((value) => `${value ?? ''}`.trim())
 }
 
+function readSavedSort(): SortOption {
+  try {
+    const saved = window.localStorage.getItem(sortStorageKey)
+    return sortOptions.includes(saved as SortOption) ? saved as SortOption : ''
+  } catch {
+    return ''
+  }
+}
+
+function sortHomes(homes: RentalHome[], sort: SortOption) {
+  const nextHomes = [...homes]
+  if (sort === 'newest') return nextHomes.sort((left, right) => right.id - left.id)
+  if (sort === 'price-asc') return nextHomes.sort((left, right) => left.dailyPrice - right.dailyPrice)
+  if (sort === 'price-desc') return nextHomes.sort((left, right) => right.dailyPrice - left.dailyPrice)
+  if (sort === 'name-asc') return nextHomes.sort((left, right) => left.title.localeCompare(right.title, 'az'))
+  return nextHomes
+}
+
 export function HomePage() {
   const [params, setParams] = useSearchParams()
   const filters = useMemo(() => filtersFromParams(params), [params])
   const [homes, setHomes] = useState<RentalHome[]>([])
+  const [sort, setSort] = useState<SortOption>(readSavedSort)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const sortedHomes = useMemo(() => sortHomes(homes, sort), [homes, sort])
 
   useEffect(() => {
     const validation = validateFilters(filters)
@@ -73,6 +96,16 @@ export function HomePage() {
     setParams(new URLSearchParams())
   }
 
+  const updateSort = (nextSort: SortOption) => {
+    setSort(nextSort)
+    try {
+      if (nextSort) window.localStorage.setItem(sortStorageKey, nextSort)
+      else window.localStorage.removeItem(sortStorageKey)
+    } catch {
+      // localStorage may be unavailable in restricted browsers; sorting still works for the current session.
+    }
+  }
+
   return (
     <AppLayout>
       <section className="hero-section">
@@ -97,12 +130,21 @@ export function HomePage() {
             <div>
               <span className="eyebrow">SEÇİLMİŞ MƏKANLAR</span>
               <h2>{hasFilters(filters) ? 'Axtarış nəticələri' : 'İndi kəşf etməyə dəyər'}</h2>
-              <p>{error ? 'Filtrləri düzəldib yenidən yoxlayın' : `${homes.length} uyğun ev · qiymətlər bir gecə üçündür`}</p>
+              <p>{error ? 'Filtrləri düzəldib yenidən yoxlayın' : `${sortedHomes.length} uyğun ev · qiymətlər bir gecə üçündür`}</p>
             </div>
-            <button className="text-link" onClick={clearFilters}>Hamısına bax <ArrowRight size={17} /></button>
+            <div className="listing-actions">
+              <label className="sort-control"><span>Sırala</span><select value={sort} onChange={(event) => updateSort(event.target.value as SortOption)}>
+                <option value="">Standart</option>
+                <option value="newest">Yeni elanlar</option>
+                <option value="price-asc">Qiymət (artan)</option>
+                <option value="price-desc">Qiymət (azalan)</option>
+                <option value="name-asc">Ad (A-Z)</option>
+              </select></label>
+              <button className="text-link" onClick={clearFilters}>Hamısına bax <ArrowRight size={17} /></button>
+            </div>
           </div>
           {error && <div className="broker-error" role="alert">{error}</div>}
-          <RentalHomeGrid homes={homes} loading={loading} onClear={clearFilters} />
+          <RentalHomeGrid homes={sortedHomes} loading={loading} onClear={clearFilters} />
         </div>
       </section>
 
