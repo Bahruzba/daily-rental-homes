@@ -60,6 +60,8 @@ Filterlər URL query param-larında saxlanılır. Live rejimdə frontend bu para
 
 Public ev siyahısında `Sırala` dropdown-u var: `Standart`, `Yeni elanlar`, `Qiymət (artan)`, `Qiymət (azalan)` və `Ad (A-Z)`. Sıralama frontend-də yüklənmiş nəticələr üzərində tətbiq olunur, mövcud search/filter dəyərlərini dəyişmir və seçilmiş dəyər localStorage-da `daily-homes-public-property-sort` açarı ilə saxlanılır. `Standart` seçimi sıralamanı sıfırlayır.
 
+Public ev kartlarında `Müqayisə et` düyməsi var. Eyni anda maksimum 3 elan müqayisə üçün seçilə bilər; 4-cü elanı seçmək istəyəndə `Ən çox 3 elan müqayisə edilə bilər.` mesajı göstərilir. Seçilmiş elan ID-ləri localStorage-da `daily-homes-compare-property-ids` açarı ilə saxlanılır və `/compare` səhifəsində qiymət, şəhər, rayon, otaq sayı, qonaq sayı, sahə və reytinq sadə cədvəldə göstərilir. `Hamısını təmizlə` seçilmiş müqayisə siyahısını sıfırlayır. Mock və live rejimlərdə mövcud property data ilə işləyir.
+
 Date availability davranışı backend qaydasına uyğundur: manual broker blokları və aktiv/blocking booking-lər seçilmiş tarix aralığında evi siyahıdan çıxarır. Rejected və cancelled booking-lər tarixləri bloklamır; pending booking-lər hələ mövcud qaydaya əsasən bloklayır.
 
 Public property detail səhifəsində `Paylaş` düyməsi var. Dəstəklənən cihazlarda browser-in Web Share API-si ilə ev başlığı və cari səhifə URL-i paylaşılır. Web Share dəstəklənmirsə, frontend cari URL-i clipboard-a kopyalayır və `Link kopyalandı.` mesajı göstərir. Linkə əlavə property məlumatı və query parametri yazılmır.

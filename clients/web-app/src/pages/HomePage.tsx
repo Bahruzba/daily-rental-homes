@@ -1,10 +1,11 @@
 import { ArrowRight, BadgeCheck, Headphones, SearchCheck, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { RentalHomeGrid } from '../components/RentalHomeGrid'
 import { SearchFilters } from '../components/SearchFilters'
 import { getRentalHomes, type RentalHomeFilters } from '../api/client'
+import { useCompareProperties } from '../hooks/useCompareProperties'
 import type { RentalHome } from '../types'
 
 const filterKeys: Array<keyof RentalHomeFilters> = ['q', 'city', 'district', 'guests', 'minPrice', 'maxPrice', 'startDate', 'endDate']
@@ -54,6 +55,8 @@ export function HomePage() {
   const [sort, setSort] = useState<SortOption>(readSavedSort)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [compareError, setCompareError] = useState('')
+  const { compareIds, isCompared, setCompared } = useCompareProperties()
   const sortedHomes = useMemo(() => sortHomes(homes, sort), [homes, sort])
 
   useEffect(() => {
@@ -106,6 +109,19 @@ export function HomePage() {
     }
   }
 
+  const toggleCompare = (id: number) => {
+    setCompareError('')
+    if (isCompared(id)) {
+      setCompared(id, false)
+      return
+    }
+    if (compareIds.length >= 3) {
+      setCompareError('Ən çox 3 elan müqayisə edilə bilər.')
+      return
+    }
+    setCompared(id, true)
+  }
+
   return (
     <AppLayout>
       <section className="hero-section">
@@ -140,11 +156,13 @@ export function HomePage() {
                 <option value="price-desc">Qiymət (azalan)</option>
                 <option value="name-asc">Ad (A-Z)</option>
               </select></label>
+              <Link className="button button-ghost compare-link" to="/compare">Müqayisə {compareIds.length ? `(${compareIds.length})` : ''}</Link>
               <button className="text-link" onClick={clearFilters}>Hamısına bax <ArrowRight size={17} /></button>
             </div>
           </div>
           {error && <div className="broker-error" role="alert">{error}</div>}
-          <RentalHomeGrid homes={sortedHomes} loading={loading} onClear={clearFilters} />
+          {compareError && <div className="broker-error" role="alert">{compareError}</div>}
+          <RentalHomeGrid homes={sortedHomes} loading={loading} onClear={clearFilters} isCompared={isCompared} onToggleCompare={toggleCompare} />
         </div>
       </section>
 

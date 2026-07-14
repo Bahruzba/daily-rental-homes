@@ -2,7 +2,13 @@ import { Heart, MapPin, Star, UsersRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { RentalHome } from '../types'
 
-export function RentalHomeCard({ home }: { home: RentalHome }) {
+type Props = {
+  home: RentalHome
+  isCompared?: boolean
+  onToggleCompare?: (id: number) => void
+}
+
+export function RentalHomeCard({ home, isCompared = false, onToggleCompare }: Props) {
   return (
     <article className="home-card">
       <Link className="card-image-wrap" to={`/homes/${home.id}`}>
@@ -15,6 +21,7 @@ export function RentalHomeCard({ home }: { home: RentalHome }) {
         <Link to={`/homes/${home.id}`}><h3>{home.title}</h3></Link>
         <div className="card-meta"><span>{home.roomCount} otaq</span><span><UsersRound size={15} /> {home.guestCount} qonaq</span></div>
         <div className="card-footer"><span className="card-price">{home.dailyPrice} ₼ <small>/ gecə</small></span><span className="review-count">{home.reviews} rəy</span></div>
+        <button type="button" className={`button button-outline compare-card-button${isCompared ? ' is-active' : ''}`} onClick={() => onToggleCompare?.(home.id)}>{isCompared ? 'Müqayisədən çıxar' : 'Müqayisə et'}</button>
       </div>
     </article>
   )

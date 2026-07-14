@@ -9,6 +9,7 @@ import { BrokerBookingDetailPage } from './pages/BrokerBookingDetailPage'
 import { BrokerCalendarPage } from './pages/BrokerCalendarPage'
 import { BrokerDashboardPage } from './pages/BrokerDashboardPage'
 import { BrokerRentalHomeManagePage } from './pages/BrokerRentalHomeManagePage'
+import { ComparePage } from './pages/ComparePage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -28,6 +29,7 @@ export default function App() {
   return <Routes>
     <Route path="/" element={<HomePage />} />
     <Route path="/homes/:id" element={<RentalDetailPage />} />
+    <Route path="/compare" element={<ComparePage />} />
     <Route path="/booking/:homeId" element={<BookingPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/unauthorized" element={<UnauthorizedPage />} />
