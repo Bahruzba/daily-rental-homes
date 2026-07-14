@@ -4,6 +4,7 @@ using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Infrastructure;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -106,6 +107,9 @@ builder.Services.AddScoped<INotificationDeliveryProvider, FakeNotificationDelive
 builder.Services.AddScoped<NotificationDeliveryService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks()
+    .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -128,6 +132,14 @@ if (app.Environment.IsDevelopment())
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("live")
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+});
 app.MapControllers();
 
 app.Run();
