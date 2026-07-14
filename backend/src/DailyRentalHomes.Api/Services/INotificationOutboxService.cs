@@ -6,6 +6,8 @@ public interface INotificationOutboxService
 {
     Task QueueBookingCreatedAsync(Booking booking, RentalHome home, CancellationToken cancellationToken);
     Task QueueBookingCancellationRequestedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken);
+    Task QueueBookingCancellationApprovedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken);
+    Task QueueBookingCancellationRejectedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken);
     Task QueueDepositRequestedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
     Task QueueDepositReceiptUploadedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
     Task QueueDepositApprovedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);

@@ -213,6 +213,115 @@ public sealed class BrokerController : ControllerBase
             cancellationToken);
     }
 
+    [HttpPost("bookings/{bookingId:long}/cancellation-requests/{requestId:long}/approve")]
+    public async Task<IActionResult> ApproveCancellationRequest(
+        long bookingId,
+        long requestId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BrokerCancellationDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await DecideCancellationRequest(
+            bookingId,
+            requestId,
+            "approved",
+            request?.Note,
+            cancellationToken);
+    }
+
+    [HttpPost("bookings/{bookingId:long}/cancellation-requests/{requestId:long}/reject")]
+    public async Task<IActionResult> RejectCancellationRequest(
+        long bookingId,
+        long requestId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BrokerCancellationDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await DecideCancellationRequest(
+            bookingId,
+            requestId,
+            "rejected",
+            request?.Note,
+            cancellationToken);
+    }
+
+    private async Task<IActionResult> DecideCancellationRequest(
+        long bookingId,
+        long requestId,
+        string decisionStatusCode,
+        string? note,
+        CancellationToken cancellationToken)
+    {
+        if (note?.Length > 1000)
+        {
+            return BadRequest(ApiResponse<object>.Fail("Decision note must be 1000 characters or less."));
+        }
+
+        var booking = await ScopeBookings(_db.Bookings)
+            .Include(item => item.RentalHome)
+            .Include(item => item.Status)
+            .Include(item => item.Deposit)
+            .Include(item => item.CancellationRequests)
+            .FirstOrDefaultAsync(item => item.Id == bookingId, cancellationToken);
+
+        if (booking is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Booking not found."));
+        }
+
+        var cancellationRequest = booking.CancellationRequests.FirstOrDefault(item => item.Id == requestId);
+        if (cancellationRequest is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Cancellation request not found."));
+        }
+
+        if (!string.Equals(cancellationRequest.StatusCode, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(ApiResponse<object>.Fail("Only a pending cancellation request can be decided."));
+        }
+
+        var userId = User.GetUserId();
+        cancellationRequest.StatusCode = decisionStatusCode;
+        cancellationRequest.DecisionNote = TextRules.CleanOptional(note);
+        cancellationRequest.DecidedAt = DateTime.UtcNow;
+        cancellationRequest.DecidedByUserId = userId;
+        cancellationRequest.UpdatedByUserId = userId;
+
+        if (decisionStatusCode == "approved")
+        {
+            var cancelledStatus = await _db.BookingStatuses.FirstOrDefaultAsync(
+                status => status.Code == BookingStatusCodes.Cancelled && status.IsActive && !status.IsDeleted,
+                cancellationToken);
+
+            if (cancelledStatus is null)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, ApiResponse<object>.Fail("Cancelled booking status is not configured."));
+            }
+
+            var oldStatusId = booking.StatusId;
+            if (oldStatusId != cancelledStatus.Id)
+            {
+                booking.StatusId = cancelledStatus.Id;
+                booking.UpdatedByUserId = userId;
+                _db.BookingStatusHistory.Add(new BookingStatusHistory
+                {
+                    BookingId = booking.Id,
+                    OldStatusId = oldStatusId,
+                    NewStatusId = cancelledStatus.Id,
+                    ChangedByUserId = userId,
+                    Note = TextRules.CleanOptional(note) ?? "Customer cancellation request approved."
+                });
+            }
+
+            await _notifications.QueueBookingCancellationApprovedAsync(booking, cancellationRequest, cancellationToken);
+        }
+        else
+        {
+            await _notifications.QueueBookingCancellationRejectedAsync(booking, cancellationRequest, cancellationToken);
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return Ok(ApiResponse<BrokerCancellationRequestResponse>.Ok(ToCancellationResponse(cancellationRequest)));
+    }
+
     private async Task<IActionResult> ChangeBookingStatusCore(
         long id,
         string targetCode,
@@ -312,7 +421,7 @@ public sealed class BrokerController : ControllerBase
         var cancellationRequest = booking.CancellationRequests
             .Where(item => item.StatusCode == "pending")
             .OrderByDescending(item => item.CreatedAt)
-            .Select(item => new BrokerCancellationRequestResponse(item.Id, item.StatusCode, item.Reason, item.CreatedAt))
+            .Select(ToCancellationResponse)
             .FirstOrDefault();
 
         return new BrokerBookingDetailResponse(
@@ -334,4 +443,13 @@ public sealed class BrokerController : ControllerBase
             deposit,
             cancellationRequest);
     }
+
+    private static BrokerCancellationRequestResponse ToCancellationResponse(BookingCancellationRequest request) => new(
+        request.Id,
+        request.BookingId,
+        request.StatusCode,
+        request.Reason,
+        request.DecisionNote,
+        request.CreatedAt,
+        request.DecidedAt);
 }

@@ -214,7 +214,14 @@ Booking status lifecycle MVP:
 
 The generic broker status endpoint remains for backward compatibility and permits cancellation only. Deposit request/approval flow remains separate: accepting a booking does not automatically create a deposit, and requesting a deposit still moves an eligible booking to `waiting_deposit`. The legacy ID-based `POST /api/bookings/{id}/status` endpoint is Admin-only.
 
-Broker booking detail (`GET /api/broker/bookings/{id}`) includes a nullable `cancellationRequest` summary when the booking has an active pending customer cancellation request. The summary contains `id`, `statusCode`, optional `reason`, and `createdAt`. This is read-only contract data for the broker UI; this PR does not add approve/reject cancellation-request workflow and does not automatically cancel bookings.
+Broker booking detail (`GET /api/broker/bookings/{id}`) includes a nullable `cancellationRequest` summary when the booking has an active pending customer cancellation request. The summary contains `id`, `bookingId`, `statusCode`, optional `reason`, optional `decisionNote`, `createdAt`, and nullable `decidedAt`. Pending cancellation requests can be decided through:
+
+- POST /api/broker/bookings/{bookingId}/cancellation-requests/{requestId}/approve
+- POST /api/broker/bookings/{bookingId}/cancellation-requests/{requestId}/reject
+
+Both endpoints accept optional JSON `{ "note": "..." }`; note is limited to 1000 characters. Broker users can decide only requests for bookings linked to their own rental homes; Admin can decide any booking in the Broker/Admin policy scope. Another broker receives 404.
+
+Approving sets the request status to `approved`, stores decision metadata, moves the booking to `cancelled`, writes booking status history using the broker note when provided, and queues a `booking_cancellation_approved` customer notification. It does not delete booking dates and does not modify deposit/refund state. Because the booking status becomes `cancelled`, existing availability rules stop treating its dates as blocking. Rejecting sets the request status to `rejected`, stores decision metadata, keeps the booking status unchanged, and queues `booking_cancellation_rejected`; the broker note is included in the notification message when provided.
 
 ### Broker rental home management
 
@@ -274,7 +281,7 @@ Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the depos
 
 Customer cancellation requests are stored in `booking_cancellation_requests`. `POST /api/account/bookings/{id}/cancellation-requests` accepts optional JSON `{ "reason": "..." }`; reason is limited to 1000 characters. Customers can request cancellation only for their own active bookings in `pending`, `waiting_deposit`, `confirmed`, or `paid`. `completed`, `rejected`, and `cancelled` bookings return `400 Bad Request`. If the booking is not owned by the customer, the API returns the existing not-found behavior. A duplicate active `pending` cancellation request returns `400 Bad Request` with a readable message.
 
-Submitting a cancellation request does not change the booking status, does not release availability, does not refund, and does not change deposit state. Account booking detail responses include `cancelRequestSent = true` when an active pending request exists. A new request queues a `booking_cancellation_requested` notification outbox record for the broker contact using the existing outbox pattern; there is still no automatic delivery worker/provider in this MVP.
+Submitting a cancellation request does not change the booking status, does not release availability, does not refund, and does not change deposit state. Account booking detail responses include `cancelRequestSent = true` when an active pending request exists. A new request queues a `booking_cancellation_requested` notification outbox record for the broker contact using the existing outbox pattern. Broker approval/rejection queues customer outbox records, but no real WhatsApp/SMS provider is used.
 
 Customer-visible status meanings:
 

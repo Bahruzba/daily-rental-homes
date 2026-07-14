@@ -57,7 +57,14 @@ public sealed record BrokerBookingDetailResponse(
 public sealed record BrokerBookingHomeResponse(long Id, string Title, string City, string? District);
 public sealed record BrokerBookingCustomerResponse(string FullName, string Phone);
 public sealed record BrokerBookingStatusResponse(string Code, string Name);
-public sealed record BrokerCancellationRequestResponse(long Id, string StatusCode, string? Reason, DateTime CreatedAt);
+public sealed record BrokerCancellationRequestResponse(
+    long Id,
+    long BookingId,
+    string StatusCode,
+    string? Reason,
+    string? DecisionNote,
+    DateTime CreatedAt,
+    DateTime? DecidedAt);
 public sealed record BrokerBookingStatusHistoryResponse(
     string? OldStatusCode,
     string NewStatusCode,

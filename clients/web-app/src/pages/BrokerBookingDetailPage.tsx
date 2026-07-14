@@ -4,12 +4,14 @@ import { Link, useParams } from 'react-router-dom'
 import {
   acceptBrokerBooking,
   approveBrokerDeposit,
+  approveBrokerCancellationRequest,
   cancelBrokerBooking,
   createBrokerBookingExpense,
   deleteBrokerBookingExpense,
   getBrokerBooking,
   getBrokerBookingExpenses,
   rejectBrokerBooking,
+  rejectBrokerCancellationRequest,
   rejectBrokerDeposit,
   requestBrokerDeposit,
   resolveApiAssetUrl,
@@ -79,6 +81,7 @@ export function BrokerBookingDetailPage() {
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseNote, setExpenseNote] = useState('')
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null)
+  const [cancellationDecisionNote, setCancellationDecisionNote] = useState('')
 
   const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses])
   const estimatedProfit = (booking?.totalAmount ?? 0) - totalExpenses
@@ -253,6 +256,31 @@ export function BrokerBookingDetailPage() {
     }
   }
 
+  const runCancellationDecision = (decision: 'approve' | 'reject') => {
+    if (!session || !booking?.cancellationRequest) return
+    if (cancellationDecisionNote.length > 1000) {
+      setError('Qərar qeydi 1000 simvoldan çox olmamalıdır.')
+      return
+    }
+
+    const confirmed = window.confirm(decision === 'approve'
+      ? 'Ləğv sorğusunu təsdiqləmək və rezervasiyanı ləğv etmək istəyirsiniz?'
+      : 'Ləğv sorğusunu rədd etmək istəyirsiniz?')
+    if (!confirmed) return
+
+    const action = decision === 'approve'
+      ? () => approveBrokerCancellationRequest(bookingId, booking.cancellationRequest!.id, session.accessToken, cancellationDecisionNote.trim() || undefined)
+      : () => rejectBrokerCancellationRequest(bookingId, booking.cancellationRequest!.id, session.accessToken, cancellationDecisionNote.trim() || undefined)
+    const message = decision === 'approve'
+      ? 'Ləğv sorğusu təsdiqləndi və rezervasiya ləğv edildi.'
+      : 'Ləğv sorğusu rədd edildi.'
+
+    void runAction(async () => {
+      await action()
+      setCancellationDecisionNote('')
+    }, message)
+  }
+
   return (
     <AppLayout>
       <section className="broker-detail-page">
@@ -297,10 +325,20 @@ export function BrokerBookingDetailPage() {
                   {booking.cancellationRequest.reason && (
                     <p className="broker-cancellation-reason">Səbəb: {booking.cancellationRequest.reason}</p>
                   )}
+                  <label className="broker-cancellation-note">
+                    <span>Qərar qeydi</span>
+                    <textarea
+                      maxLength={1000}
+                      value={cancellationDecisionNote}
+                      onChange={(event) => setCancellationDecisionNote(event.target.value)}
+                      placeholder="İstəyə bağlı qeyd yazın"
+                    />
+                    <small>{cancellationDecisionNote.length}/1000</small>
+                  </label>
                   <div className="broker-cancellation-actions">
-                    <button className="button button-ghost" disabled>Təsdiqlə</button>
-                    <button className="button button-ghost" disabled>Rədd et</button>
-                    <small>Qərar vermə funksiyası növbəti mərhələdə əlavə olunacaq.</small>
+                    <button className="button button-primary" disabled={saving} onClick={() => runCancellationDecision('approve')}>Təsdiqlə</button>
+                    <button className="button button-ghost" disabled={saving} onClick={() => runCancellationDecision('reject')}>Rədd et</button>
+                    <small>Təsdiq rezervasiyanı ləğv edir. Rədd etmə booking statusunu dəyişmir.</small>
                   </div>
                 </div>
               )}

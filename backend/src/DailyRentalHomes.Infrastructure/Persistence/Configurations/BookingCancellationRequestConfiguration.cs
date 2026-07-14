@@ -12,6 +12,7 @@ public sealed class BookingCancellationRequestConfiguration : IEntityTypeConfigu
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Reason).HasMaxLength(1000);
         builder.Property(x => x.StatusCode).HasMaxLength(50).IsRequired();
+        builder.Property(x => x.DecisionNote).HasMaxLength(1000);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.RequestedByUserId);
         builder.HasIndex(x => x.StatusCode);
