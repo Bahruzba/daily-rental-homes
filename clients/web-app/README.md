@@ -108,6 +108,7 @@ Mock rejimdə yaratma, redaktə, publish/unpublish və media əməliyyatları lo
 - `POST /api/broker/rental-homes`
 - `GET /api/broker/rental-homes/{id}`
 - `PUT /api/broker/rental-homes/{id}`
+- `POST /api/broker/rental-homes/{id}/duplicate`
 - `PATCH /api/broker/rental-homes/{id}/publish`
 - `PATCH /api/broker/rental-homes/{id}/unpublish`
 - `POST /api/broker/rental-homes/{id}/media`
@@ -116,6 +117,8 @@ Mock rejimdə yaratma, redaktə, publish/unpublish və media əməliyyatları lo
 - `GET /api/broker/rental-homes/{id}/availability-blocks`
 - `POST /api/broker/rental-homes/{id}/availability-blocks`
 - `DELETE /api/broker/rental-homes/{id}/availability-blocks/{blockId}`
+
+Broker property list kartlarında `Duplikat yarat` düyməsi var. Live rejimdə frontend `POST /api/broker/rental-homes/{id}/duplicate` endpoint-ini çağırır və uğurdan sonra yeni qaralama elanın edit səhifəsinə keçir. Mock rejimdə property lokal demo state-də kopyalanır, booking və availability blokları kopyalanmır.
 
 Şəkil upload-u JPG, PNG və WebP faylları üçün 5 MB limitlə işləyir. Live rejimdə yüklənmiş fayllar backend-in lokal `/uploads/rental-homes/...` URL-ləri ilə göstərilir. Production üçün private object storage, resize/compression və daha sərt content validation ayrıca mərhələdir.
 

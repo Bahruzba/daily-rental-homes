@@ -1,6 +1,6 @@
 import { ArrowLeft, CalendarX, ImagePlus, Save, Star, Trash2 } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   BrokerRequestError,
   addBrokerAvailabilityBlock,
@@ -34,6 +34,7 @@ const emptyForm: BrokerRentalHomePayload = {
 export function BrokerRentalHomeManagePage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { session } = useAuth()
   const homeId = Number(id)
   const isNew = id === 'new'
@@ -45,7 +46,10 @@ export function BrokerRentalHomeManagePage() {
   const [blockBusyId, setBlockBusyId] = useState<number>()
   const [blockForm, setBlockForm] = useState({ startDate: '', endDate: '', note: '' })
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [success, setSuccess] = useState(() => {
+    const state = location.state as { success?: string } | null
+    return state?.success ?? ''
+  })
   const title = useMemo(() => isNew ? 'Yeni ev əlavə et' : 'Evi idarə et', [isNew])
 
   useEffect(() => {

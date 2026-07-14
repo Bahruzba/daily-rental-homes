@@ -161,6 +161,7 @@ Broker/Admin JWT endpoints:
 - POST /api/broker/rental-homes
 - GET /api/broker/rental-homes/{id}
 - PUT /api/broker/rental-homes/{id}
+- POST /api/broker/rental-homes/{id}/duplicate
 - PATCH /api/broker/rental-homes/{id}/publish
 - PATCH /api/broker/rental-homes/{id}/unpublish
 - DELETE /api/broker/rental-homes/{id}
@@ -174,6 +175,8 @@ Broker/Admin JWT endpoints:
 Broker users can only manage homes where `rental_homes.broker_user_id` matches their JWT user ID. Another broker receives 404 to avoid leaking ownership. Customer and unauthenticated users cannot access these endpoints.
 
 Create/update accepts title, description, city, district, address, daily price, room count, guest count, and publication state. New homes default to draft/unpublished unless `isPublished` is explicitly sent. Public rental-home endpoints still return existing homes; published media can be used by the frontend as the main/card image.
+
+`POST /api/broker/rental-homes/{id}/duplicate` creates a draft copy of an existing rental home. Broker users can duplicate only their own homes; Admin can duplicate any home. The duplicate gets a new ID, new timestamps, `isPublished = false`, copied basic property fields, copied amenities, and new media rows that reference the same existing media URLs. It does not copy bookings, availability blocks, expenses, reports, cancellation requests, or any booking-related state. Coordinates and house rules are not copied because those fields are not part of the current rental-home model yet.
 
 Home images are stored in the existing `media_files` table with `file_type = HomeImage`. The first image for a home is assigned `sort_order = 0` and treated as the main image. Setting another image as main moves it to `sort_order = 0`. Upload accepts JPG, PNG, and WebP images up to 5 MB and stores development files under `src/DailyRentalHomes.Api/wwwroot/uploads/rental-homes/{homeId}`. Public URLs are returned as `/uploads/rental-homes/...`; local filesystem paths are not exposed.
 

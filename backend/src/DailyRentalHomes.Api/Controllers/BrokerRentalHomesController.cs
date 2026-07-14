@@ -74,6 +74,67 @@ public sealed class BrokerRentalHomesController : ControllerBase
         return Ok(ApiResponse<BrokerRentalHomeDetailResponse>.Ok(await ToDetail(home, cancellationToken)));
     }
 
+    [HttpPost("{id:long}/duplicate")]
+    public async Task<IActionResult> Duplicate(long id, CancellationToken cancellationToken)
+    {
+        var source = await OwnHomes()
+            .AsNoTracking()
+            .Include(item => item.Amenities)
+            .Include(item => item.MediaFiles)
+            .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
+
+        if (source is null) return NotFound(ApiResponse<object>.Fail("Rental home not found."));
+
+        var userId = User.GetUserId();
+        var duplicate = new RentalHome
+        {
+            BrokerUserId = source.BrokerUserId,
+            Title = source.Title,
+            Description = source.Description,
+            City = source.City,
+            District = source.District,
+            Address = source.Address,
+            DailyPrice = source.DailyPrice,
+            RoomCount = source.RoomCount,
+            GuestCount = source.GuestCount,
+            IsPublished = false,
+            CreatedByUserId = userId,
+            UpdatedAt = DateTime.UtcNow,
+            UpdatedByUserId = userId
+        };
+
+        foreach (var amenity in source.Amenities.Where(item => !item.IsDeleted))
+        {
+            duplicate.Amenities.Add(new RentalHomeAmenity
+            {
+                AmenityId = amenity.AmenityId,
+                CreatedByUserId = userId
+            });
+        }
+
+        foreach (var media in source.MediaFiles
+                     .Where(item => !item.IsDeleted && item.FileType == MediaFileType.HomeImage)
+                     .OrderBy(item => item.SortOrder)
+                     .ThenBy(item => item.Id))
+        {
+            duplicate.MediaFiles.Add(new MediaFile
+            {
+                FileType = media.FileType,
+                FileName = media.FileName,
+                FileUrl = media.FileUrl,
+                ContentType = media.ContentType,
+                SizeBytes = media.SizeBytes,
+                SortOrder = media.SortOrder,
+                CreatedByUserId = userId
+            });
+        }
+
+        _db.RentalHomes.Add(duplicate);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return Ok(ApiResponse<BrokerRentalHomeSaveResponse>.Ok(new BrokerRentalHomeSaveResponse(duplicate.Id)));
+    }
+
     [HttpPut("{id:long}")]
     public async Task<IActionResult> Update(long id, BrokerRentalHomeSaveRequest request, CancellationToken cancellationToken)
     {

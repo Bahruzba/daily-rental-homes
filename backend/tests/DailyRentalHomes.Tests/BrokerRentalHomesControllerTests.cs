@@ -76,6 +76,63 @@ public sealed class BrokerRentalHomesControllerTests
     }
 
     [Fact]
+    public async Task OwnerCanDuplicateOwnRentalHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var response = GetData<BrokerRentalHomeSaveResponse>(await controller.Duplicate(101, default));
+
+        var duplicate = await context.RentalHomes
+            .Include(item => item.MediaFiles)
+            .SingleAsync(item => item.Id == response.Id);
+        Assert.NotEqual(101, duplicate.Id);
+        Assert.Equal(10, duplicate.BrokerUserId);
+        Assert.Equal("Broker One Home", duplicate.Title);
+        Assert.Equal("Test address", duplicate.Address);
+        Assert.Equal(120m, duplicate.DailyPrice);
+        Assert.Equal(3, duplicate.RoomCount);
+        Assert.Equal(6, duplicate.GuestCount);
+        Assert.False(duplicate.IsPublished);
+        Assert.NotEqual(default, duplicate.CreatedAt);
+        Assert.NotNull(duplicate.UpdatedAt);
+        Assert.Equal(2, duplicate.MediaFiles.Count);
+        Assert.All(duplicate.MediaFiles, media => Assert.Equal(response.Id, media.RentalHomeId));
+    }
+
+    [Fact]
+    public async Task AnotherBrokerCannotDuplicateRentalHome()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.Duplicate(102, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+        Assert.Equal(2, await context.RentalHomes.CountAsync());
+    }
+
+    [Fact]
+    public async Task DuplicatedRentalHomeDoesNotCopyBookingsOrAvailability()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingStatuses.Add(new BookingStatus { Id = 401, Name = "Pending", Code = BookingStatusCodes.Pending, SortOrder = 1 });
+        context.Bookings.Add(Booking(501, 101, 401, new DateOnly(2026, 8, 5)));
+        context.RentalHomeAvailabilityBlocks.Add(Block(301, 101, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 3), "Private"));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var response = GetData<BrokerRentalHomeSaveResponse>(await controller.Duplicate(101, default));
+
+        Assert.False((await context.RentalHomes.SingleAsync(item => item.Id == response.Id)).IsPublished);
+        Assert.Empty(await context.Bookings.Where(item => item.RentalHomeId == response.Id).ToListAsync());
+        Assert.Empty(await context.RentalHomeAvailabilityBlocks.Where(item => item.RentalHomeId == response.Id).ToListAsync());
+    }
+
+    [Fact]
     public async Task BrokerCannotUpdateAnotherBrokersRentalHome()
     {
         await using var context = CreateContext();

@@ -333,6 +333,29 @@ export async function updateBrokerRentalHome(id: number, payload: BrokerRentalHo
   return request<{ id: number }>(`/api/broker/rental-homes/${id}`, token, { method: 'PUT', body: JSON.stringify(payload) })
 }
 
+export async function duplicateBrokerRentalHome(id: number, token: string) {
+  if (!useLiveApi) {
+    const source = mockHomes.find((item) => item.id === id)
+    if (!source) throw new BrokerRequestError('Ev tapÄ±lmadÄ±.')
+    const nextId = Math.max(0, ...mockHomes.map((item) => item.id)) + 1
+    const now = new Date().toISOString()
+    const duplicate: BrokerRentalHomeDetail = {
+      ...source,
+      id: nextId,
+      isPublished: false,
+      bookingCount: 0,
+      upcomingBookingCount: 0,
+      availabilityBlocks: [],
+      media: source.media.map((media) => ({ ...media, id: Number(`${nextId}${media.id}`), url: media.url })),
+      createdAt: now,
+      updatedAt: now,
+    }
+    mockHomes = [duplicate, ...mockHomes]
+    return { id: nextId }
+  }
+  return request<{ id: number }>(`/api/broker/rental-homes/${id}/duplicate`, token, { method: 'POST' })
+}
+
 export async function publishBrokerRentalHome(id: number, token: string, isPublished: boolean) {
   if (!useLiveApi) {
     const home = mockHomes.find((item) => item.id === id)
