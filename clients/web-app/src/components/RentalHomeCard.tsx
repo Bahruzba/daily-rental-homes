@@ -6,9 +6,11 @@ type Props = {
   home: RentalHome
   isFavorite?: boolean
   onToggleFavorite?: (id: number) => void
+  isCompared?: boolean
+  onToggleCompare?: (id: number) => void
 }
 
-export function RentalHomeCard({ home, isFavorite = false, onToggleFavorite }: Props) {
+export function RentalHomeCard({ home, isFavorite = false, onToggleFavorite, isCompared = false, onToggleCompare }: Props) {
   const favoriteLabel = isFavorite ? 'Seçilmişlərdən çıxar' : 'Seçilmişlərə əlavə et'
 
   return (
@@ -23,6 +25,7 @@ export function RentalHomeCard({ home, isFavorite = false, onToggleFavorite }: P
         <Link to={`/homes/${home.id}`}><h3>{home.title}</h3></Link>
         <div className="card-meta"><span>{home.roomCount} otaq</span><span><UsersRound size={15} /> {home.guestCount} qonaq</span></div>
         <div className="card-footer"><span className="card-price">{home.dailyPrice} ₼ <small>/ gecə</small></span><span className="review-count">{home.reviews} rəy</span></div>
+        <button type="button" className={`button button-outline compare-card-button${isCompared ? ' is-active' : ''}`} onClick={() => onToggleCompare?.(home.id)}>{isCompared ? 'Müqayisədən çıxar' : 'Müqayisə et'}</button>
       </div>
     </article>
   )

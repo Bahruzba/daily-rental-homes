@@ -1,10 +1,11 @@
 import { ArrowRight, BadgeCheck, Headphones, Heart, SearchCheck, ShieldCheck } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { RentalHomeGrid } from '../components/RentalHomeGrid'
 import { SearchFilters } from '../components/SearchFilters'
 import { getRentalHomes, type RentalHomeFilters } from '../api/client'
+import { useCompareProperties } from '../hooks/useCompareProperties'
 import { useFavoriteProperties } from '../hooks/useFavoriteProperties'
 import type { RentalHome } from '../types'
 
@@ -56,6 +57,8 @@ export function HomePage() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [compareError, setCompareError] = useState('')
+  const { compareIds, isCompared, setCompared } = useCompareProperties()
   const { favoriteIds, isFavorite, toggleFavorite } = useFavoriteProperties()
   const sortedHomes = useMemo(() => sortHomes(homes, sort), [homes, sort])
   const visibleHomes = useMemo(() => showFavoritesOnly ? sortedHomes.filter((home) => isFavorite(home.id)) : sortedHomes, [isFavorite, showFavoritesOnly, sortedHomes])
@@ -110,6 +113,19 @@ export function HomePage() {
     }
   }
 
+  const toggleCompare = (id: number) => {
+    setCompareError('')
+    if (isCompared(id)) {
+      setCompared(id, false)
+      return
+    }
+    if (compareIds.length >= 3) {
+      setCompareError('Ən çox 3 elan müqayisə edilə bilər.')
+      return
+    }
+    setCompared(id, true)
+  }
+
   return (
     <AppLayout>
       <section className="hero-section">
@@ -145,16 +161,20 @@ export function HomePage() {
                 <option value="price-desc">Qiymət (azalan)</option>
                 <option value="name-asc">Ad (A-Z)</option>
               </select></label>
+              <Link className="button button-ghost compare-link" to="/compare">Müqayisə {compareIds.length ? `(${compareIds.length})` : ''}</Link>
               <button className="text-link" onClick={clearFilters}>Hamısına bax <ArrowRight size={17} /></button>
             </div>
           </div>
           {error && <div className="broker-error" role="alert">{error}</div>}
+          {compareError && <div className="broker-error" role="alert">{compareError}</div>}
           <RentalHomeGrid
             homes={visibleHomes}
             loading={loading}
             onClear={clearFilters}
             isFavorite={isFavorite}
             onToggleFavorite={toggleFavorite}
+            isCompared={isCompared}
+            onToggleCompare={toggleCompare}
             emptyTitle={showFavoritesOnly ? 'Seçilmiş elan yoxdur.' : undefined}
             emptyDescription={showFavoritesOnly ? 'Ürək işarəsinə klikləyərək elanları seçilmişlərə əlavə edin.' : undefined}
             emptyAction={showFavoritesOnly ? <button type="button" className="button button-primary" onClick={() => setShowFavoritesOnly(false)}>Bütün nəticələr</button> : undefined}
