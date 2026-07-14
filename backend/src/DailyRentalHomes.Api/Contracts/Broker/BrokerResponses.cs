@@ -9,7 +9,12 @@ public sealed record BrokerSummaryResponse(
     int PendingBookings,
     int PendingDepositBookings,
     int UpcomingBookings,
-    decimal TotalExpectedAmount);
+    decimal TotalExpectedAmount,
+    int TotalProperties,
+    int PublishedProperties,
+    int ActiveBookings,
+    int PendingDeposits,
+    int PendingCancellationRequests);
 
 public sealed record BrokerRentalHomeResponse(
     long Id,

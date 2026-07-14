@@ -140,6 +140,11 @@ export function BrokerDashboardPage() {
     void loadBookings({ status: status || undefined, from: bookingFrom || undefined, to: bookingTo || undefined })
   }
 
+  const showPendingDeposits = () => {
+    setBookingStatus('waiting_deposit')
+    void loadBookings({ status: 'waiting_deposit', from: bookingFrom || undefined, to: bookingTo || undefined })
+  }
+
   const loadReportSummary = async (from = reportFrom, to = reportTo) => {
     if (!session) return
     const validation = validateDateRange(from, to)
@@ -264,14 +269,15 @@ export function BrokerDashboardPage() {
             <>
               {summary && (
                 <div className="broker-summary-grid">
-                  <article><Building2 /><span>Aktiv evlər</span><strong>{summary.activeHomes} / {summary.totalHomes}</strong></article>
-                  <article><ClipboardList /><span>Rezervasiyalar</span><strong>{summary.totalBookings}</strong><small>{summary.pendingBookings} yeni sorğu</small></article>
-                  <article><CalendarDays /><span>Yaxın rezervasiyalar</span><strong>{summary.upcomingBookings}</strong><small>{summary.pendingDepositBookings} beh gözləyir</small></article>
-                  <article><Coins /><span>Gözlənilən məbləğ</span><strong>{money.format(summary.totalExpectedAmount)}</strong></article>
+                  <Link to="#broker-properties"><span>Evlər</span><strong>{summary.totalProperties}</strong></Link>
+                  <Link to="#broker-properties" onClick={() => setPropertyPublishStatus('published')}><span>Aktiv elanlar</span><strong>{summary.publishedProperties}</strong></Link>
+                  <Link to="#broker-bookings"><span>Aktiv rezervasiyalar</span><strong>{summary.activeBookings}</strong></Link>
+                  <Link to="#broker-bookings" onClick={showPendingDeposits}><span>Gözləyən behlər</span><strong>{summary.pendingDeposits}</strong></Link>
+                  <Link to="#broker-bookings"><span>Ləğv sorğuları</span><strong>{summary.pendingCancellationRequests}</strong></Link>
                 </div>
               )}
 
-              <div className="broker-section-heading">
+              <div className="broker-section-heading" id="broker-properties">
                 <div>
                   <h2>Hesabat xülasəsi</h2>
                   <p>Rezervasiya gəliri, xərclər və təxmini mənfəət.</p>
@@ -324,7 +330,7 @@ export function BrokerDashboardPage() {
                 )}
               </div>
 
-              <div className="broker-section-heading">
+              <div className="broker-section-heading" id="broker-bookings">
                 <div>
                   <h2>Evlərim</h2>
                   <p>Broker hesabınıza bağlı elanlar.</p>

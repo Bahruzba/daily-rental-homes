@@ -12,6 +12,11 @@ export type BrokerSummary = {
   pendingDepositBookings: number
   upcomingBookings: number
   totalExpectedAmount: number
+  totalProperties: number
+  publishedProperties: number
+  activeBookings: number
+  pendingDeposits: number
+  pendingCancellationRequests: number
 }
 
 export type BrokerReportSummary = {
@@ -293,7 +298,25 @@ async function request<T>(path: string, token: string, init?: RequestInit): Prom
 }
 
 export async function getBrokerSummary(token: string): Promise<BrokerSummary> {
-  if (!useLiveApi) return { totalHomes: 2, activeHomes: 2, totalBookings: mockBookings.length, pendingBookings: mockBookings.filter((item) => item.statusCode === 'pending').length, pendingDepositBookings: mockBookings.filter((item) => item.statusCode === 'waiting_deposit').length, upcomingBookings: mockBookings.length, totalExpectedAmount: mockBookings.filter((item) => item.statusCode !== 'cancelled').reduce((sum, item) => sum + item.totalAmount, 0) }
+  if (!useLiveApi) {
+    const activeBookings = mockBookings.filter((item) => !['cancelled', 'rejected', 'completed'].includes(item.statusCode)).length
+    const pendingDeposits = mockBookings.filter((item) => item.statusCode === 'waiting_deposit').length
+    const pendingCancellationRequests = Object.values(mockCancellationRequests).filter((item) => item?.statusCode === 'pending').length
+    return {
+      totalHomes: mockHomes.length,
+      activeHomes: mockHomes.filter((item) => item.isPublished).length,
+      totalBookings: mockBookings.length,
+      pendingBookings: mockBookings.filter((item) => item.statusCode === 'pending').length,
+      pendingDepositBookings: pendingDeposits,
+      upcomingBookings: mockBookings.length,
+      totalExpectedAmount: mockBookings.filter((item) => item.statusCode !== 'cancelled').reduce((sum, item) => sum + item.totalAmount, 0),
+      totalProperties: mockHomes.length,
+      publishedProperties: mockHomes.filter((item) => item.isPublished).length,
+      activeBookings,
+      pendingDeposits,
+      pendingCancellationRequests,
+    }
+  }
   return request('/api/broker/summary', token)
 }
 

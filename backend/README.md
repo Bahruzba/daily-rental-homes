@@ -203,6 +203,8 @@ Invalid guest count, price ranges, one-sided date ranges, bad date format, or `s
 
 Broker endpoints require a Broker or Admin JWT. Broker users only receive homes and bookings linked through `rental_homes.broker_user_id`; another broker's booking returns 404. Soft-deleted homes/bookings are not manageable through broker status actions.
 
+Broker summary (`GET /api/broker/summary`) includes compact dashboard counts for `totalProperties`, `publishedProperties`, `activeBookings`, `pendingDeposits`, and `pendingCancellationRequests`. These counts use the same broker ownership scope as the rest of the broker endpoints. `activeBookings` excludes rejected, cancelled, and completed bookings. `pendingCancellationRequests` counts only active pending customer cancellation requests.
+
 Booking status lifecycle MVP:
 
 - New customer bookings start as `pending`.

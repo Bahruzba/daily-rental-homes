@@ -75,6 +75,54 @@ public sealed class BrokerControllerTests
     }
 
     [Fact]
+    public async Task SummaryCountsIncludeOnlyBrokerOwnedData()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        var draftHome = Home(103, 10, "Broker One Draft Home");
+        draftHome.IsPublished = false;
+        context.RentalHomes.Add(draftHome);
+        context.Bookings.AddRange(
+            Booking(1003, 101, 4, "Cancelled Customer", 120m, new DateOnly(2026, 8, 15)),
+            Booking(1004, 101, 2, "Deposit Customer", 120m, new DateOnly(2026, 8, 16)));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetSummary(default);
+        var summary = GetData<BrokerSummaryResponse>(result);
+
+        Assert.Equal(2, summary.TotalProperties);
+        Assert.Equal(1, summary.PublishedProperties);
+        Assert.Equal(3, summary.TotalBookings);
+        Assert.Equal(2, summary.ActiveBookings);
+        Assert.Equal(1, summary.PendingDeposits);
+    }
+
+    [Fact]
+    public async Task SummaryPendingCancellationCountIncludesOnlyPendingRequests()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.AddRange(
+            PendingCancellationRequest(501, 1001),
+            new BookingCancellationRequest
+            {
+                Id = 502,
+                BookingId = 1001,
+                RequestedByUserId = 30,
+                StatusCode = "approved"
+            },
+            PendingCancellationRequest(503, 1002));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetSummary(default);
+        var summary = GetData<BrokerSummaryResponse>(result);
+
+        Assert.Equal(1, summary.PendingCancellationRequests);
+    }
+
+    [Fact]
     public async Task BookingListReturnsTrueForPendingCancellationRequest()
     {
         await using var context = CreateContext();
