@@ -363,6 +363,7 @@ export function BrokerDashboardPage() {
                       </div>
                       <div>
                         <em className={`broker-status status-${booking.statusCode}`}>{statusLabel(booking.statusCode, booking.statusName)}</em>
+                        {booking.hasPendingCancellationRequest && <em className="broker-cancel-request-badge">Ləğv sorğusu</em>}
                         <strong>{money.format(booking.totalAmount)}</strong>
                       </div>
                     </Link>

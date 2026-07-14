@@ -106,6 +106,7 @@ export type BrokerBooking = {
   createdAt: string
   note?: string | null
   isDepositPending: boolean
+  hasPendingCancellationRequest: boolean
 }
 
 export type BrokerBookingFilters = {
@@ -196,8 +197,8 @@ let mockHomes: BrokerRentalHomeDetail[] = [
 ].map((home) => ({ ...home, description: 'Demo broker evi üçün qısa təsvir.', address: 'Demo ünvan', roomCount: 3, media: home.mainImageUrl ? [{ id: home.id * 100, url: home.mainImageUrl, type: 'HomeImage', isMain: true, sortOrder: 0, contentType: 'image/webp' }] : [], availabilityBlocks: [], upcomingBookingCount: home.bookingCount, createdAt: new Date().toISOString(), updatedAt: null }))
 
 let mockBookings: BrokerBooking[] = [
-  { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false },
-  { bookingId: 1002, rentalHomeId: 2, rentalHomeTitle: mockHomes[1].title, customerName: 'Murad Əliyev', customerPhone: '+994 70 444 22 11', statusCode: 'waiting_deposit', statusName: 'WaitingDeposit', totalAmount: 250, datesCount: 2, firstDate: '2026-07-19', lastDate: '2026-07-20', createdAt: '2026-07-01T16:45:00Z', isDepositPending: true },
+  { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false, hasPendingCancellationRequest: true },
+  { bookingId: 1002, rentalHomeId: 2, rentalHomeTitle: mockHomes[1].title, customerName: 'Murad Əliyev', customerPhone: '+994 70 444 22 11', statusCode: 'waiting_deposit', statusName: 'WaitingDeposit', totalAmount: 250, datesCount: 2, firstDate: '2026-07-19', lastDate: '2026-07-20', createdAt: '2026-07-01T16:45:00Z', isDepositPending: true, hasPendingCancellationRequest: false },
 ]
 
 const mockDepositStorageKey = 'daily-homes-mock-deposits'
@@ -551,6 +552,7 @@ export async function approveBrokerCancellationRequest(bookingId: number, reques
     booking.statusCode = 'cancelled'
     booking.statusName = 'Cancelled'
     booking.isDepositPending = false
+    booking.hasPendingCancellationRequest = false
     return response
   }
   return request<BrokerCancellationRequest>(`/api/broker/bookings/${bookingId}/cancellation-requests/${requestId}/approve`, token, { method: 'POST', body: JSON.stringify({ note }) })
@@ -559,9 +561,11 @@ export async function approveBrokerCancellationRequest(bookingId: number, reques
 export async function rejectBrokerCancellationRequest(bookingId: number, requestId: number, token: string, note?: string): Promise<BrokerCancellationRequest> {
   if (!useLiveApi) {
     const request = mockCancellationRequests[bookingId]
+    const booking = mockBookings.find((item) => item.bookingId === bookingId)
     if (!request || request.id !== requestId) throw new BrokerRequestError('LÉ™ÄŸv sorÄŸusu tapÄ±lmadÄ±.')
     const response: BrokerCancellationRequest = { ...request, statusCode: 'rejected', decisionNote: note || null, decidedAt: new Date().toISOString() }
     delete mockCancellationRequests[bookingId]
+    if (booking) booking.hasPendingCancellationRequest = false
     return response
   }
   return request<BrokerCancellationRequest>(`/api/broker/bookings/${bookingId}/cancellation-requests/${requestId}/reject`, token, { method: 'POST', body: JSON.stringify({ note }) })

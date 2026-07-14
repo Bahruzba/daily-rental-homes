@@ -75,6 +75,61 @@ public sealed class BrokerControllerTests
     }
 
     [Fact]
+    public async Task BookingListReturnsTrueForPendingCancellationRequest()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1001));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetBookings(null, null, null, default);
+        var booking = Assert.Single(GetData<IReadOnlyList<BrokerBookingListItemResponse>>(result));
+
+        Assert.True(booking.HasPendingCancellationRequest);
+    }
+
+    [Theory]
+    [InlineData("approved")]
+    [InlineData("rejected")]
+    [InlineData("resolved")]
+    public async Task BookingListReturnsFalseForResolvedCancellationRequests(string statusCode)
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(new BookingCancellationRequest
+        {
+            Id = 501,
+            BookingId = 1001,
+            RequestedByUserId = 30,
+            StatusCode = statusCode
+        });
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetBookings(null, null, null, default);
+        var booking = Assert.Single(GetData<IReadOnlyList<BrokerBookingListItemResponse>>(result));
+
+        Assert.False(booking.HasPendingCancellationRequest);
+    }
+
+    [Fact]
+    public async Task BookingListCancellationBadgeDoesNotExposeAnotherBrokersData()
+    {
+        await using var context = CreateContext();
+        await SeedData(context);
+        context.BookingCancellationRequests.Add(PendingCancellationRequest(501, 1002));
+        await context.SaveChangesAsync();
+        var controller = CreateController(context, brokerId: 10);
+
+        var result = await controller.GetBookings(null, null, null, default);
+        var booking = Assert.Single(GetData<IReadOnlyList<BrokerBookingListItemResponse>>(result));
+
+        Assert.Equal(1001, booking.BookingId);
+        Assert.False(booking.HasPendingCancellationRequest);
+    }
+
+    [Fact]
     public async Task BrokerCannotSeeAnotherBrokersBooking()
     {
         await using var context = CreateContext();

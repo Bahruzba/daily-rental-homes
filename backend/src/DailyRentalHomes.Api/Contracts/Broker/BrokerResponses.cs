@@ -37,7 +37,8 @@ public sealed record BrokerBookingListItemResponse(
     DateOnly? LastDate,
     DateTime CreatedAt,
     string? Note,
-    bool IsDepositPending);
+    bool IsDepositPending,
+    bool HasPendingCancellationRequest);
 
 public sealed record BrokerBookingDetailResponse(
     long BookingId,
