@@ -300,6 +300,22 @@ The booking and deposit must exist in the broker ownership scope. The new deadli
 
 Successful extensions queue one customer notification outbox record with type `deposit_deadline_extended`, title `Beh müddəti uzadıldı`, and a message containing the new deadline plus the reason when provided. This PR does not add automatic refund, automatic booking cancellation, reminder worker changes, real message sending, or frontend UI.
 
+Admin users can manually run one deposit deadline reminder processing pass:
+
+- POST /api/admin/deposit-deadline-reminders/process
+
+The processor queues customer `deposit_deadline_reminder` outbox records for deposits whose `deadlineAt` is in the future and inside the configured reminder window. It skips approved deposits and bookings in `cancelled`, `completed`, or `rejected` status. The reminder window is configured with:
+
+```json
+"DepositReminderOptions": {
+  "ReminderBeforeHours": 24
+}
+```
+
+Duplicate protection reuses the existing `outbound_messages` table: a reminder is considered already queued when the same deposit already has a `deposit_deadline_reminder` message containing the current effective deadline. Running the manual processor repeatedly does not queue duplicates for the same deadline. If a broker later extends the deposit deadline, the new deadline is treated as a new reminder cycle and can queue a new reminder when it enters the configured window.
+
+Reminder processing is notification-only. It does not change booking status, deposit status, deposit amount, deadline extension metadata, refunds, or availability. Automatic background execution is intentionally not included yet; a later worker PR should call the same processing service. No real WhatsApp/SMS message is sent directly by this processor.
+
 Customer cancellation requests are stored in `booking_cancellation_requests`. `POST /api/account/bookings/{id}/cancellation-requests` accepts optional JSON `{ "reason": "..." }`; reason is limited to 1000 characters. Customers can request cancellation only for their own active bookings in `pending`, `waiting_deposit`, `confirmed`, or `paid`. `completed`, `rejected`, and `cancelled` bookings return `400 Bad Request`. If the booking is not owned by the customer, the API returns the existing not-found behavior. A duplicate active `pending` cancellation request returns `400 Bad Request` with a readable message.
 
 Submitting a cancellation request does not change the booking status, does not release availability, does not refund, and does not change deposit state. Account booking detail responses include `cancelRequestSent = true` when an active pending request exists. A new request queues a `booking_cancellation_requested` notification outbox record for the broker contact using the existing outbox pattern. Broker approval/rejection queues customer outbox records, but no real WhatsApp/SMS provider is used.

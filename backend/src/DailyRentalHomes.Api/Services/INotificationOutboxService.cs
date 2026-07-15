@@ -9,6 +9,7 @@ public interface INotificationOutboxService
     Task QueueBookingCancellationApprovedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken);
     Task QueueBookingCancellationRejectedAsync(Booking booking, BookingCancellationRequest request, CancellationToken cancellationToken);
     Task QueueDepositRequestedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
+    Task QueueDepositDeadlineReminderAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
     Task QueueDepositDeadlineExtendedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
     Task QueueDepositReceiptUploadedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);
     Task QueueDepositApprovedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken);

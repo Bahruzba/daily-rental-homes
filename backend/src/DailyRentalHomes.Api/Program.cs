@@ -102,7 +102,10 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddSingleton<AccessTokenBuilder>();
 builder.Services.AddOptions<NotificationWorkerOptions>()
     .Bind(builder.Configuration.GetSection(NotificationWorkerOptions.SectionName));
+builder.Services.AddOptions<DepositReminderOptions>()
+    .Bind(builder.Configuration.GetSection(DepositReminderOptions.SectionName));
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
+builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDeadlineReminderProcessingService>();
 builder.Services.AddScoped<INotificationDeliveryProvider, FakeNotificationDeliveryProvider>();
 builder.Services.AddScoped<NotificationDeliveryService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();
