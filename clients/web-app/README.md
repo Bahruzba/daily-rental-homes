@@ -148,6 +148,8 @@ Broker edit səhifəsində sadə “Uyğun olmayan tarixlər” bölməsi var. S
 
 Broker `/broker/bookings/:id` səhifəsində məbləğ, gələcək son tarix, maskalanmış kart, bank və qeyd ilə beh istəyə bilər. Customer `/account` bölməsində öz telefonuna/hesabına bağlı rezervasiyaları, `/account/bookings/:id` səhifəsində beh təlimatını görür və JPG/PNG/WebP qəbz şəkli yükləyir. Broker yüklənmiş qəbzi təsdiq və ya rədd edə bilər. Mock rejimdə eyni ekranlar və state keçidləri backend olmadan işləyir.
 
+Broker booking detail səhifəsində mövcud beh üçün son tarix, uzadılma vaxtı və uzadılma səbəbi göstərilir. Uyğun statuslarda broker yeni gələcək son tarix və istəyə bağlı 500 simvolluq səbəblə `POST /api/broker/bookings/{bookingId}/deposit/extend-deadline` endpoint-ini çağıraraq müddəti uzada bilər. Customer booking detail səhifəsində də aktual son tarix və uzadılma səbəbi görünür, amma customer üçün uzatma action-u yoxdur. Mock rejimdə demo beh deadline extension məlumatı göstərilir və deadline uzatma lokal state/localStorage ilə simulyasiya olunur.
+
 Bu MVP real ödəniş etmir. Live receipt faylları backend-in lokal `wwwroot/uploads/deposit-receipts` qovluğunda saxlanılır. Production üçün private object storage və authorization-aware download tələb olunur. Frontend və backend yalnız maskalanmış kart dəyəri qəbul edir; tam PAN yazılmamalıdır.
 
 Beh əməliyyatlarından sonra frontend bildirişin növbəyə alındığını göstərir. Mock rejimdə bu mesaj lokal simulyasiya olunur; live rejimdə backend `outbound_messages` cədvəlinə qeyd yazır. Bu MVP-də tam notification UI və real WhatsApp/SMS provider yoxdur.

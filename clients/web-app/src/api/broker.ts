@@ -162,6 +162,8 @@ export type DepositInfo = {
   amount: number
   statusCode: string
   deadlineAt?: string | null
+  deadlineExtendedAt?: string | null
+  deadlineExtensionReason?: string | null
   cardHolderName?: string | null
   cardPanMasked?: string | null
   bankName?: string | null
@@ -181,6 +183,19 @@ export type RequestDepositPayload = {
   cardPanMasked: string
   bankName?: string
   note?: string
+}
+
+export type ExtendDepositDeadlinePayload = {
+  deadlineAt: string
+  reason?: string
+}
+
+export type ExtendDepositDeadlineResponse = {
+  bookingId: number
+  depositId: number
+  deadlineAt: string
+  deadlineExtendedAt: string
+  deadlineExtensionReason?: string | null
 }
 
 export type BrokerBookingExpense = {
@@ -224,6 +239,7 @@ let mockBookings: BrokerBooking[] = [
 const mockDepositStorageKey = 'daily-homes-mock-deposits'
 const mockExpenseStorageKey = 'daily-homes-mock-expenses'
 const defaultMockDeposits: Record<number, DepositInfo | undefined> = {
+  1001: { id: 5001, amount: 100, statusCode: 'requested', deadlineAt: '2026-07-25T18:00:00Z', deadlineExtendedAt: '2026-07-15T12:00:00Z', deadlineExtensionReason: 'Müştəri əlavə vaxt istədi.', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
   1002: { id: 5002, amount: 75, statusCode: 'requested', deadlineAt: '2026-07-10T18:00:00Z', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
 }
 
@@ -528,6 +544,36 @@ export async function requestBrokerDeposit(id: number, payload: RequestDepositPa
     return deposit
   }
   return request(`/api/broker/bookings/${id}/deposit/request`, token, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export async function extendBrokerDepositDeadline(id: number, payload: ExtendDepositDeadlinePayload, token: string): Promise<ExtendDepositDeadlineResponse> {
+  if (!useLiveApi) {
+    const deposit = mockDeposits[id]
+    const booking = mockBookings.find((item) => item.bookingId === id)
+    if (!booking || !deposit) throw new BrokerRequestError('Rezervasiya və ya beh tapılmadı.')
+    if (deposit.statusCode === 'approved') throw new BrokerRequestError('Təsdiqlənmiş beh üçün son tarix uzadıla bilməz.')
+    if (['cancelled', 'completed', 'rejected'].includes(booking.statusCode)) throw new BrokerRequestError('Bu rezervasiya statusu üçün beh müddəti uzadıla bilməz.')
+    if (payload.reason && payload.reason.length > 500) throw new BrokerRequestError('Səbəb 500 simvoldan çox olmamalıdır.')
+
+    const nextDeadline = new Date(payload.deadlineAt)
+    const currentDeadline = deposit.deadlineAt ? new Date(deposit.deadlineAt) : null
+    if (Number.isNaN(nextDeadline.getTime()) || nextDeadline <= new Date()) throw new BrokerRequestError('Yeni son tarix gələcəkdə olmalıdır.')
+    if (currentDeadline && nextDeadline <= currentDeadline) throw new BrokerRequestError('Yeni son tarix mövcud son tarixdən gec olmalıdır.')
+
+    const extendedAt = new Date().toISOString()
+    deposit.deadlineAt = nextDeadline.toISOString()
+    deposit.deadlineExtendedAt = extendedAt
+    deposit.deadlineExtensionReason = payload.reason?.trim() || null
+    persistMockDeposits()
+    return {
+      bookingId: id,
+      depositId: deposit.id,
+      deadlineAt: deposit.deadlineAt,
+      deadlineExtendedAt: extendedAt,
+      deadlineExtensionReason: deposit.deadlineExtensionReason,
+    }
+  }
+  return request(`/api/broker/bookings/${id}/deposit/extend-deadline`, token, { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export async function approveBrokerDeposit(id: number, token: string, note?: string): Promise<DepositInfo> {

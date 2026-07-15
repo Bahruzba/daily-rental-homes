@@ -8,6 +8,7 @@ import {
   cancelBrokerBooking,
   createBrokerBookingExpense,
   deleteBrokerBookingExpense,
+  extendBrokerDepositDeadline,
   getBrokerBooking,
   getBrokerBookingExpenses,
   rejectBrokerBooking,
@@ -29,6 +30,12 @@ const tomorrow = () => {
   value.setMinutes(value.getMinutes() - value.getTimezoneOffset())
   return value.toISOString().slice(0, 16)
 }
+const toDateTimeLocalValue = (iso?: string | null) => {
+  const value = iso ? new Date(iso) : new Date(Date.now() + 24 * 60 * 60_000)
+  value.setMinutes(value.getMinutes() - value.getTimezoneOffset())
+  return value.toISOString().slice(0, 16)
+}
+const blockedDepositExtensionBookingStatuses = ['cancelled', 'completed', 'rejected']
 
 const depositLabels: Record<string, string> = {
   requested: 'Qəbz gözlənilir',
@@ -72,6 +79,8 @@ export function BrokerBookingDetailPage() {
   const [success, setSuccess] = useState('')
   const [amount, setAmount] = useState('')
   const [deadline, setDeadline] = useState(tomorrow)
+  const [extensionDeadline, setExtensionDeadline] = useState(tomorrow)
+  const [extensionReason, setExtensionReason] = useState('')
   const [holder, setHolder] = useState('')
   const [pan, setPan] = useState('**** **** **** ')
   const [bank, setBank] = useState('')
@@ -85,6 +94,11 @@ export function BrokerBookingDetailPage() {
 
   const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses])
   const estimatedProfit = (booking?.totalAmount ?? 0) - totalExpenses
+  const canExtendDepositDeadline = Boolean(
+    booking?.deposit &&
+      booking.deposit.statusCode !== 'approved' &&
+      !blockedDepositExtensionBookingStatuses.includes(booking.status.code),
+  )
 
   const loadExpenses = async () => {
     if (!session || !Number.isInteger(bookingId) || bookingId <= 0) return
@@ -116,6 +130,11 @@ export function BrokerBookingDetailPage() {
         getBrokerBookingExpenses(bookingId, session.accessToken),
       ])
       setBooking(bookingData)
+      if (bookingData.deposit?.deadlineAt) {
+        const nextDeadline = new Date(bookingData.deposit.deadlineAt)
+        nextDeadline.setDate(nextDeadline.getDate() + 1)
+        setExtensionDeadline(toDateTimeLocalValue(nextDeadline.toISOString()))
+      }
       setExpenses(expenseData)
     } catch (cause) {
       console.error('Broker booking detail load failed', cause)
@@ -178,6 +197,44 @@ export function BrokerBookingDetailPage() {
           session.accessToken,
         ),
       'Beh tələbi yaradıldı, müştəri bildirişi və reminder növbəyə alındı.',
+    )
+  }
+
+  const submitDeadlineExtension = (event: FormEvent) => {
+    event.preventDefault()
+    if (!session || !booking?.deposit) return
+    setError('')
+    setSuccess('')
+
+    if (extensionReason.length > 500) {
+      setError('Səbəb 500 simvoldan çox olmamalıdır.')
+      return
+    }
+
+    const nextDeadline = new Date(extensionDeadline)
+    const currentDeadline = booking.deposit.deadlineAt ? new Date(booking.deposit.deadlineAt) : null
+    if (Number.isNaN(nextDeadline.getTime()) || nextDeadline <= new Date()) {
+      setError('Yeni son tarix gələcəkdə olmalıdır.')
+      return
+    }
+    if (currentDeadline && nextDeadline <= currentDeadline) {
+      setError('Yeni son tarix mövcud son tarixdən gec olmalıdır.')
+      return
+    }
+
+    if (!window.confirm('Beh müddətini uzatmaq istədiyinizə əminsiniz?')) return
+
+    void runAction(
+      () =>
+        extendBrokerDepositDeadline(
+          bookingId,
+          {
+            deadlineAt: nextDeadline.toISOString(),
+            reason: extensionReason.trim() || undefined,
+          },
+          session.accessToken,
+        ),
+      'Beh müddəti uzadıldı və müştəri bildirişi növbəyə alındı.',
     )
   }
 
@@ -380,6 +437,13 @@ export function BrokerBookingDetailPage() {
                         <div><span>Son tarix</span><strong>{booking.deposit.deadlineAt ? dateTime.format(new Date(booking.deposit.deadlineAt)) : '—'}</strong></div>
                         <div><span>Kart</span><strong>{booking.deposit.cardPanMasked || '—'}</strong></div>
                         <div><span>Bank</span><strong>{booking.deposit.bankName || '—'}</strong></div>
+                        <div><span>Uzadılıb</span><strong>{booking.deposit.deadlineExtendedAt ? 'Bəli' : 'Xeyr'}</strong></div>
+                        {booking.deposit.deadlineExtendedAt && (
+                          <div><span>Uzadılma vaxtı</span><strong>{dateTime.format(new Date(booking.deposit.deadlineExtendedAt))}</strong></div>
+                        )}
+                        {booking.deposit.deadlineExtensionReason && (
+                          <p className="deposit-instruction">Uzadılma səbəbi: {booking.deposit.deadlineExtensionReason}</p>
+                        )}
                         {booking.deposit.receipt && (
                           <div className="deposit-receipt">
                             <span>Yüklənmiş qəbz</span>
@@ -389,6 +453,21 @@ export function BrokerBookingDetailPage() {
                           </div>
                         )}
                         {booking.deposit.reviewNote && <p className="deposit-review-note">Yoxlama qeydi: {booking.deposit.reviewNote}</p>}
+                        {canExtendDepositDeadline && (
+                          <form className="deposit-extension-form input-grid" onSubmit={submitDeadlineExtension}>
+                            <div className="full">
+                              <strong>Beh müddətini uzat</strong>
+                              <p>Yeni son tarix mövcud son tarixdən gec və gələcəkdə olmalıdır.</p>
+                            </div>
+                            <label><span>Yeni son tarix</span><input type="datetime-local" required value={extensionDeadline} onChange={(event) => setExtensionDeadline(event.target.value)} /></label>
+                            <label className="full">
+                              <span>Səbəb</span>
+                              <textarea value={extensionReason} maxLength={500} onChange={(event) => setExtensionReason(event.target.value)} placeholder="İstəyə bağlı səbəb" />
+                              <small>{extensionReason.length}/500</small>
+                            </label>
+                            <button className="button button-primary" disabled={saving}><CreditCard size={16} /> Müddəti uzat</button>
+                          </form>
+                        )}
                         {booking.deposit.statusCode === 'receipt_uploaded' && (
                           <div className="deposit-review-actions">
                             <button className="button button-primary" disabled={saving} onClick={() => session && void runAction(() => approveBrokerDeposit(bookingId, session.accessToken), 'Beh təsdiqləndi və müştəri bildirişi növbəyə alındı.')}><CheckCircle2 size={16} /> Təsdiqlə</button>
