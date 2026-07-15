@@ -109,6 +109,7 @@ builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDea
 builder.Services.AddScoped<INotificationDeliveryProvider, FakeNotificationDeliveryProvider>();
 builder.Services.AddScoped<NotificationDeliveryService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();
+builder.Services.AddHostedService<DepositDeadlineReminderWorker>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
