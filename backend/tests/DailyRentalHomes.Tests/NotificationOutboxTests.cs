@@ -493,6 +493,50 @@ public sealed class NotificationOutboxTests
     }
 
     [Fact]
+    public void InvalidRetryConfigurationFailsOptionsValidation()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddNotificationDelivery(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{NotificationDeliveryOptions.SectionName}:Retry:MaxAttempts"] = "0",
+                [$"{NotificationDeliveryOptions.SectionName}:Retry:InitialDelayMinutes"] = "2",
+                [$"{NotificationDeliveryOptions.SectionName}:Retry:MaxDelayMinutes"] = "1"
+            })
+            .Build());
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<NotificationDeliveryOptions>>().Value);
+
+        Assert.Contains("Notification retry configuration", exception.Message);
+    }
+
+    [Fact]
+    public void MetaWhatsAppProviderRequiresWebhookVerifyToken()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddNotificationDelivery(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{NotificationDeliveryOptions.SectionName}:Provider"] = NotificationDeliveryOptions.MetaWhatsAppProvider,
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:PhoneNumberId"] = "123456789",
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:AccessToken"] = "test-access-token",
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:ApiVersion"] = "v22.0",
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:AppSecret"] = "test-app-secret"
+            })
+            .Build());
+        using var provider = services.BuildServiceProvider();
+
+        var exception = Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<NotificationDeliveryOptions>>().Value);
+
+        Assert.Contains("WebhookVerifyToken", exception.Message);
+    }
+
+    [Fact]
     public void NotificationRetryOptionsUseProductionSafeDefaults()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
