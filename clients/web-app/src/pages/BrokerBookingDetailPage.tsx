@@ -444,6 +444,9 @@ export function BrokerBookingDetailPage() {
                         {booking.deposit.deadlineExtensionReason && (
                           <p className="deposit-instruction">Uzadılma səbəbi: {booking.deposit.deadlineExtensionReason}</p>
                         )}
+                        {booking.deposit.isDeadlineExpired && (
+                          <p className="deposit-expired-warning">Beh üçün ayrılmış vaxt bitib.</p>
+                        )}
                         {booking.deposit.receipt && (
                           <div className="deposit-receipt">
                             <span>Yüklənmiş qəbz</span>

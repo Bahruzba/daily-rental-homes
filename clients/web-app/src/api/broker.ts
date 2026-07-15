@@ -112,12 +112,14 @@ export type BrokerBooking = {
   note?: string | null
   isDepositPending: boolean
   hasPendingCancellationRequest: boolean
+  isDeadlineExpired: boolean
 }
 
 export type BrokerBookingFilters = {
   status?: string
   from?: string
   to?: string
+  hasExpiredDepositDeadline?: boolean
 }
 
 export type BrokerCalendarEvent = {
@@ -164,6 +166,7 @@ export type DepositInfo = {
   deadlineAt?: string | null
   deadlineExtendedAt?: string | null
   deadlineExtensionReason?: string | null
+  isDeadlineExpired?: boolean
   cardHolderName?: string | null
   cardPanMasked?: string | null
   bankName?: string | null
@@ -232,15 +235,15 @@ mockHomes[0].availabilityBlocks = [
 ]
 
 let mockBookings: BrokerBooking[] = [
-  { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false, hasPendingCancellationRequest: true },
-  { bookingId: 1002, rentalHomeId: 2, rentalHomeTitle: mockHomes[1].title, customerName: 'Murad Əliyev', customerPhone: '+994 70 444 22 11', statusCode: 'waiting_deposit', statusName: 'WaitingDeposit', totalAmount: 250, datesCount: 2, firstDate: '2026-07-19', lastDate: '2026-07-20', createdAt: '2026-07-01T16:45:00Z', isDepositPending: true, hasPendingCancellationRequest: false },
+  { bookingId: 1001, rentalHomeId: 1, rentalHomeTitle: mockHomes[0].title, customerName: 'Aysel Məmmədova', customerPhone: '+994 50 555 12 12', statusCode: 'pending', statusName: 'Pending', totalAmount: 540, datesCount: 3, firstDate: '2026-07-12', lastDate: '2026-07-14', createdAt: '2026-07-02T10:20:00Z', note: 'Saat 14:00-da gələcəyik.', isDepositPending: false, hasPendingCancellationRequest: true, isDeadlineExpired: false },
+  { bookingId: 1002, rentalHomeId: 2, rentalHomeTitle: mockHomes[1].title, customerName: 'Murad Əliyev', customerPhone: '+994 70 444 22 11', statusCode: 'waiting_deposit', statusName: 'WaitingDeposit', totalAmount: 250, datesCount: 2, firstDate: '2026-07-19', lastDate: '2026-07-20', createdAt: '2026-07-01T16:45:00Z', isDepositPending: true, hasPendingCancellationRequest: false, isDeadlineExpired: true },
 ]
 
 const mockDepositStorageKey = 'daily-homes-mock-deposits'
 const mockExpenseStorageKey = 'daily-homes-mock-expenses'
 const defaultMockDeposits: Record<number, DepositInfo | undefined> = {
-  1001: { id: 5001, amount: 100, statusCode: 'requested', deadlineAt: '2026-07-25T18:00:00Z', deadlineExtendedAt: '2026-07-15T12:00:00Z', deadlineExtensionReason: 'Müştəri əlavə vaxt istədi.', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
-  1002: { id: 5002, amount: 75, statusCode: 'requested', deadlineAt: '2026-07-10T18:00:00Z', cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
+  1001: { id: 5001, amount: 100, statusCode: 'requested', deadlineAt: '2026-07-25T18:00:00Z', deadlineExtendedAt: '2026-07-15T12:00:00Z', deadlineExtensionReason: 'Müştəri əlavə vaxt istədi.', isDeadlineExpired: false, cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
+  1002: { id: 5002, amount: 75, statusCode: 'requested', deadlineAt: '2026-07-10T18:00:00Z', isDeadlineExpired: true, cardHolderName: 'Demo Broker', cardPanMasked: '**** **** **** 2026', bankName: 'Kapital Bank', note: 'Təyinatda booking nömrəsini qeyd edin.', requestedAt: '2026-07-02T12:00:00Z', allowReupload: true, receipt: null },
 }
 
 function readMockDeposits() {
@@ -507,6 +510,7 @@ export async function getBrokerBookings(token: string, filters: BrokerBookingFil
   if (filters.status?.trim()) search.set('status', filters.status.trim())
   if (filters.from?.trim()) search.set('from', filters.from.trim())
   if (filters.to?.trim()) search.set('to', filters.to.trim())
+  if (filters.hasExpiredDepositDeadline) search.set('hasExpiredDepositDeadline', 'true')
   const query = search.toString()
   return request(`/api/broker/bookings${query ? `?${query}` : ''}`, token)
 }
@@ -747,6 +751,7 @@ function mockBookingDates(booking: BrokerBooking): string[] {
 function applyMockBrokerBookingFilters(bookings: BrokerBooking[], filters: BrokerBookingFilters): BrokerBooking[] {
   return bookings.filter((booking) => {
     if (filters.status?.trim() && booking.statusCode !== filters.status.trim()) return false
+    if (filters.hasExpiredDepositDeadline && !booking.isDeadlineExpired) return false
     if (filters.from?.trim() && filters.to?.trim()) {
       const dates = mockBookingDates(booking)
       return dates.some((date) => date >= filters.from! && date <= filters.to!)
