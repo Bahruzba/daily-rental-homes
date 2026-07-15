@@ -35,6 +35,8 @@ public sealed class AppDbContextModelTests
         Assert.Equal("outbound_messages", notification?.GetTableName());
         Assert.Equal("recipient_user_id", notification?.FindProperty(nameof(OutboundMessage.RecipientUserId))?.GetColumnName(notificationTable));
         Assert.Equal("type_code", notification?.FindProperty(nameof(OutboundMessage.TypeCode))?.GetColumnName(notificationTable));
+        Assert.Equal("provider_delivery_status", notification?.FindProperty(nameof(OutboundMessage.ProviderDeliveryStatus))?.GetColumnName(notificationTable));
+        Assert.Equal("provider_status_updated_at", notification?.FindProperty(nameof(OutboundMessage.ProviderStatusUpdatedAt))?.GetColumnName(notificationTable));
     }
 
     [Fact]

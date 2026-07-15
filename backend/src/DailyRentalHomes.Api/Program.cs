@@ -107,6 +107,7 @@ builder.Services.AddOptions<DepositReminderOptions>()
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
 builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDeadlineReminderProcessingService>();
 builder.Services.AddNotificationDelivery(builder.Configuration);
+builder.Services.AddScoped<MetaWhatsAppWebhookService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();
 builder.Services.AddHostedService<DepositDeadlineReminderWorker>();
 builder.Services.AddInfrastructure(builder.Configuration);

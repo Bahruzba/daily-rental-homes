@@ -738,6 +738,10 @@ namespace DailyRentalHomes.Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("created_by_user_id");
 
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("delivered_at");
+
                     b.Property<string>("ErrorMessage")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)")
@@ -751,10 +755,23 @@ namespace DailyRentalHomes.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("payload_json");
 
+                    b.Property<string>("ProviderDeliveryStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("provider_delivery_status");
+
                     b.Property<string>("ProviderMessageId")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)")
                         .HasColumnName("provider_message_id");
+
+                    b.Property<DateTime?>("ProviderStatusUpdatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("provider_status_updated_at");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("read_at");
 
                     b.Property<string>("RecipientName")
                         .HasMaxLength(150)
@@ -816,6 +833,8 @@ namespace DailyRentalHomes.Infrastructure.Migrations
                     b.HasIndex("BookingId");
 
                     b.HasIndex("Channel");
+
+                    b.HasIndex("ProviderMessageId");
 
                     b.HasIndex("RecipientUserId");
 

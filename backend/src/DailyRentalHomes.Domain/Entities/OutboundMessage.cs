@@ -15,9 +15,13 @@ public sealed class OutboundMessage : BaseEntity
     public string Text { get; set; } = string.Empty;
     public DateTime? ScheduledAt { get; set; }
     public string? ProviderMessageId { get; set; }
+    public string? ProviderDeliveryStatus { get; set; }
+    public DateTime? ProviderStatusUpdatedAt { get; set; }
     public string? ErrorMessage { get; set; }
     public string? PayloadJson { get; set; }
     public DateTime? SentAt { get; set; }
+    public DateTime? DeliveredAt { get; set; }
+    public DateTime? ReadAt { get; set; }
     public long? BookingId { get; set; }
     public long? BookingDepositId { get; set; }
 

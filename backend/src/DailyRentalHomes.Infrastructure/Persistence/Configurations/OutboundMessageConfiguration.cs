@@ -16,12 +16,14 @@ public sealed class OutboundMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.Property(x => x.To).HasMaxLength(100).IsRequired();
         builder.Property(x => x.Text).HasMaxLength(2000).IsRequired();
         builder.Property(x => x.ProviderMessageId).HasMaxLength(200);
+        builder.Property(x => x.ProviderDeliveryStatus).HasMaxLength(50);
         builder.Property(x => x.ErrorMessage).HasMaxLength(1000);
         builder.Property(x => x.PayloadJson).HasColumnType("nvarchar(max)");
         builder.HasIndex(x => x.Channel);
         builder.HasIndex(x => x.Status);
         builder.HasIndex(x => x.TypeCode);
         builder.HasIndex(x => x.RecipientUserId);
+        builder.HasIndex(x => x.ProviderMessageId);
         builder.HasIndex(x => x.ScheduledAt);
         builder.HasIndex(x => x.BookingId);
         builder.HasIndex(x => x.BookingDepositId);
