@@ -8,6 +8,7 @@ public static class NotificationTypeCodes
     public const string BookingCancellationRejected = "booking_cancellation_rejected";
     public const string BookingStatusChanged = "booking_status_changed";
     public const string DepositRequested = "deposit_requested";
+    public const string DepositDeadlineExtended = "deposit_deadline_extended";
     public const string DepositDeadlineReminder = "deposit_deadline_reminder";
     public const string DepositReceiptUploaded = "deposit_receipt_uploaded";
     public const string DepositApproved = "deposit_approved";

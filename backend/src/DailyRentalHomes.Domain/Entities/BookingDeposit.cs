@@ -12,6 +12,9 @@ public sealed class BookingDeposit : BaseEntity
     public DateTime? PaidAt { get; set; }
     public long? PaymentCardId { get; set; }
     public string? Note { get; set; }
+    public DateTime? DeadlineExtendedAt { get; set; }
+    public long? DeadlineExtendedByUserId { get; set; }
+    public string? DeadlineExtensionReason { get; set; }
     public DateTime? UploadedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public long? ReviewedByUserId { get; set; }
