@@ -14,6 +14,9 @@ public sealed class OutboundMessage : BaseEntity
     public string To { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
     public DateTime? ScheduledAt { get; set; }
+    public int DeliveryAttemptCount { get; set; }
+    public DateTime? LastAttemptAt { get; set; }
+    public DateTime? NextAttemptAt { get; set; }
     public string? ProviderMessageId { get; set; }
     public string? ProviderDeliveryStatus { get; set; }
     public DateTime? ProviderStatusUpdatedAt { get; set; }

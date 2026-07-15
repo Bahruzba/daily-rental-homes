@@ -139,8 +139,175 @@ public sealed class NotificationOutboxTests
         var message = await context.OutboundMessages.SingleAsync();
         Assert.Equal(1, summary.Processed);
         Assert.Equal(1, summary.Failed);
-        Assert.Equal(MessageStatus.Failed, message.Status);
+        Assert.Equal(1, summary.Retried);
+        Assert.Equal(MessageStatus.Pending, message.Status);
+        Assert.Equal(1, message.DeliveryAttemptCount);
+        Assert.NotNull(message.NextAttemptAt);
         Assert.Contains("unexpected error", message.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task RetryableFailureSchedulesAnotherAttempt()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(20, "Retry", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.RetryableFailed("Temporary provider failure.")));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(1, summary.Retried);
+        Assert.Equal(MessageStatus.Pending, message.Status);
+        Assert.Equal(1, message.DeliveryAttemptCount);
+        Assert.NotNull(message.LastAttemptAt);
+        Assert.NotNull(message.NextAttemptAt);
+        Assert.True(message.NextAttemptAt > message.LastAttemptAt);
+        Assert.Equal("Temporary provider failure.", message.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task BackoffIncreasesBetweenAttempts()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(21, "Retry", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.RetryableFailed("Temporary provider failure.")));
+
+        await service.ProcessPendingAsync(20, default);
+        var first = await context.OutboundMessages.SingleAsync();
+        first.NextAttemptAt = DateTime.UtcNow.AddMinutes(-1);
+        await context.SaveChangesAsync();
+
+        await service.ProcessPendingAsync(20, default);
+
+        var second = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(2, second.DeliveryAttemptCount);
+        Assert.NotNull(second.LastAttemptAt);
+        Assert.NotNull(second.NextAttemptAt);
+        Assert.True(second.NextAttemptAt.Value - second.LastAttemptAt.Value >= TimeSpan.FromMinutes(4));
+    }
+
+    [Fact]
+    public void BackoffIsCappedAtConfiguredMaximum()
+    {
+        var now = new DateTime(2026, 7, 15, 10, 0, 0, DateTimeKind.Utc);
+        var options = new NotificationRetryOptions
+        {
+            InitialDelayMinutes = 10,
+            MaxDelayMinutes = 15
+        };
+
+        var nextAttempt = NotificationDeliveryService.CalculateNextAttemptAt(now, attemptCount: 5, options);
+
+        Assert.Equal(now.AddMinutes(15), nextAttempt);
+    }
+
+    [Fact]
+    public async Task PendingRetryIsNotProcessedBeforeNextAttemptTime()
+    {
+        await using var context = CreateContext();
+        var message = Message(22, "Retry later", "Text", DateTime.UtcNow.AddMinutes(-10));
+        message.NextAttemptAt = DateTime.UtcNow.AddHours(1);
+        context.OutboundMessages.Add(message);
+        await context.SaveChangesAsync();
+        var provider = new RecordingNotificationDeliveryProvider(NotificationDeliveryResult.Sent("unused"));
+        var service = DeliveryService(context, provider);
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        Assert.Equal(0, summary.Processed);
+        Assert.Equal(0, provider.Calls);
+        Assert.Equal(MessageStatus.Pending, (await context.OutboundMessages.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task SuccessfulRetryMarksMessageSentAndClearsRetrySchedule()
+    {
+        await using var context = CreateContext();
+        var message = Message(23, "Retry success", "Text", DateTime.UtcNow.AddMinutes(-10));
+        message.DeliveryAttemptCount = 1;
+        message.NextAttemptAt = DateTime.UtcNow.AddMinutes(-1);
+        message.ErrorMessage = "Previous failure.";
+        context.OutboundMessages.Add(message);
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(NotificationDeliveryResult.Sent("provider-retry-ok")));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var processed = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Sent);
+        Assert.Equal(MessageStatus.Sent, processed.Status);
+        Assert.Equal(2, processed.DeliveryAttemptCount);
+        Assert.Null(processed.NextAttemptAt);
+        Assert.Null(processed.ErrorMessage);
+        Assert.Equal("provider-retry-ok", processed.ProviderMessageId);
+    }
+
+    [Fact]
+    public async Task PermanentFailureIsNotAutomaticallyRetried()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(24, "Permanent", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.Failed("Permanent provider failure.")));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(0, summary.Retried);
+        Assert.Equal(MessageStatus.Failed, message.Status);
+        Assert.Equal(1, message.DeliveryAttemptCount);
+        Assert.Null(message.NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task MaximumAttemptsStopFurtherAutomaticRetries()
+    {
+        await using var context = CreateContext();
+        var message = Message(25, "Max", "Text", DateTime.UtcNow.AddMinutes(-10));
+        message.DeliveryAttemptCount = 4;
+        context.OutboundMessages.Add(message);
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.RetryableFailed("Still temporary.")));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var processed = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(0, summary.Retried);
+        Assert.Equal(5, processed.DeliveryAttemptCount);
+        Assert.Equal(MessageStatus.Failed, processed.Status);
+        Assert.Null(processed.NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task WorkerContinuesProcessingOtherMessagesAfterRetryableFailure()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.AddRange(
+            Message(26, "Retry", "Text", DateTime.UtcNow.AddMinutes(-1)),
+            Message(27, "Success", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var provider = new SequenceNotificationDeliveryProvider(
+            NotificationDeliveryResult.RetryableFailed("Temporary."),
+            NotificationDeliveryResult.Sent("provider-success"));
+        var service = DeliveryService(context, provider);
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        Assert.Equal(2, summary.Processed);
+        Assert.Equal(1, summary.Sent);
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(1, summary.Retried);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.Id == 26 && item.Status == MessageStatus.Pending);
+        Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.Id == 27 && item.Status == MessageStatus.Sent);
     }
 
     [Fact]
@@ -248,6 +415,29 @@ public sealed class NotificationOutboxTests
     }
 
     [Fact]
+    public async Task ManualRetryUsesProviderDeliveryPathForFailedMessage()
+    {
+        await using var context = CreateContext();
+        var message = Message(14, "Manual retry", "Text", DateTime.UtcNow.AddMinutes(-10));
+        message.Status = MessageStatus.Failed;
+        message.DeliveryAttemptCount = 5;
+        message.ErrorMessage = "Exhausted.";
+        context.OutboundMessages.Add(message);
+        await context.SaveChangesAsync();
+        var provider = new RecordingNotificationDeliveryProvider(NotificationDeliveryResult.Sent("manual-retry-14"));
+        var controller = AdminController(context, provider);
+
+        var response = GetData<ProcessPendingNotificationsResponse>(await controller.Retry(14, default));
+
+        var processed = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, provider.Calls);
+        Assert.Equal(1, response.Sent);
+        Assert.Equal(MessageStatus.Sent, processed.Status);
+        Assert.Equal("manual-retry-14", processed.ProviderMessageId);
+        Assert.Equal(1, processed.DeliveryAttemptCount);
+    }
+
+    [Fact]
     public async Task ManualEndpointRejectsInvalidBatchSize()
     {
         await using var context = CreateContext();
@@ -300,6 +490,19 @@ public sealed class NotificationOutboxTests
         configuration.GetSection(NotificationDeliveryOptions.SectionName).Bind(options);
 
         Assert.Equal(NotificationDeliveryOptions.FakeProvider, options.Provider);
+    }
+
+    [Fact]
+    public void NotificationRetryOptionsUseProductionSafeDefaults()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
+        var options = new NotificationDeliveryOptions();
+
+        configuration.GetSection(NotificationDeliveryOptions.SectionName).Bind(options);
+
+        Assert.Equal(5, options.Retry.MaxAttempts);
+        Assert.Equal(2, options.Retry.InitialDelayMinutes);
+        Assert.Equal(60, options.Retry.MaxDelayMinutes);
     }
 
     private static AppDbContext CreateContext()
@@ -379,5 +582,18 @@ public sealed class NotificationOutboxTests
 
             return Task.FromResult(_result);
         }
+    }
+
+    private sealed class SequenceNotificationDeliveryProvider : INotificationDeliveryProvider
+    {
+        private readonly Queue<NotificationDeliveryResult> _results;
+
+        public SequenceNotificationDeliveryProvider(params NotificationDeliveryResult[] results)
+        {
+            _results = new Queue<NotificationDeliveryResult>(results);
+        }
+
+        public Task<NotificationDeliveryResult> SendAsync(OutboundMessage message, CancellationToken cancellationToken) =>
+            Task.FromResult(_results.Dequeue());
     }
 }

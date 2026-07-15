@@ -467,7 +467,7 @@ The background worker is registered but disabled by default:
 }
 ```
 
-When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past, processes a limited batch, and sends each eligible outbox row through `INotificationDeliveryProvider`. Eligibility and retry/failure decisions stay in the outbox processing layer; the provider only attempts delivery and returns success/failure details. Provider exceptions are caught, logged with the outbox message id, and converted into the existing failed-message path so one provider failure does not crash the processing pass. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
+When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past and `next_attempt_at` is empty or due, processes a limited batch, and sends each eligible outbox row through `INotificationDeliveryProvider`. Eligibility and retry/failure decisions stay in the outbox processing layer; the provider only attempts delivery and returns success/failure details. Provider exceptions are caught, logged with the outbox message id, and converted into the retryable failed-attempt path so one provider failure does not crash the processing pass. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
 
 - POST /api/admin/notifications/process-pending
 
@@ -479,7 +479,39 @@ Optional body:
 }
 ```
 
-The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Manual Admin processing and the background worker use the same provider-backed delivery path; there is no separate Admin-only delivery implementation. Messages are never deleted by delivery processing. This PR does not add Meta webhooks, inbound WhatsApp messages, template CRUD, SMS/email fallback, or a second retry framework.
+The response contains `processed`, `sent`, `failed`, and `retried`. Batch size must be between 1 and 100. Manual Admin processing and the background worker use the same provider-backed delivery path; there is no separate Admin-only delivery implementation.
+
+Notification delivery retry configuration:
+
+```json
+"NotificationDelivery": {
+  "Retry": {
+    "MaxAttempts": 5,
+    "InitialDelayMinutes": 2,
+    "MaxDelayMinutes": 60
+  }
+}
+```
+
+Retry behavior:
+
+- Retryable failures keep the outbox row in `pending`, increment `delivery_attempt_count`, store `last_attempt_at` and `error_message`, and schedule `next_attempt_at`.
+- Backoff is exponential: first retry uses `InitialDelayMinutes`, later retries double the delay, and the delay is capped by `MaxDelayMinutes`.
+- Messages are not automatically retried before `next_attempt_at`.
+- When `MaxAttempts` is reached, the row is marked `failed` and automatic retries stop.
+- Successful delivery marks the row `sent`, stores the provider message id, clears `error_message`, and clears `next_attempt_at`.
+- Permanent failures are marked `failed` immediately and are not automatically retried.
+
+Current failure classification is deliberately small:
+
+- Retryable: provider exceptions, network/timeout failures, Meta HTTP `429`, and Meta HTTP `5xx`.
+- Permanent: invalid/missing recipient phone number, missing/empty configured Meta template mapping, missing required template metadata, and other Meta `4xx` responses.
+
+Admin users can manually retry a failed/exhausted notification through:
+
+- POST /api/admin/notifications/{id}/retry
+
+Manual retry resets the outbox row to a fresh pending attempt and immediately uses the same `INotificationDeliveryProvider` delivery path. It does not bypass provider authentication, phone normalization, Meta template request building, or provider message-id persistence. Messages are never deleted by delivery processing. This PR does not add distributed locks, external queues, Meta webhooks beyond the existing status webhook, inbound WhatsApp messages, template CRUD, SMS/email fallback, or a second retry framework.
 
 Meta WhatsApp delivery status webhooks are supported for outbound delivery visibility:
 
@@ -553,9 +585,9 @@ Templates must already exist and be approved in the Meta WhatsApp account. This 
 
 Production WhatsApp messaging may require approved templates depending on Meta account status, conversation window, and business messaging rules. Richer delivery receipts, rate limiting, and production retry/idempotency strategy remain future work.
 
-Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
+Admin notification list responses also expose delivery/retry fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, nullable `sentAt`, `deliveryAttemptCount`, nullable `lastAttemptAt`, and nullable `nextAttemptAt`.
 
-Production still requires template governance where needed, retry/backoff and idempotency strategy, richer delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
+Production still requires template governance where needed, stronger idempotency strategy, richer delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
 
 ### Dictionaries and related data
 

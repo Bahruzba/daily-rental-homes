@@ -136,6 +136,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
             payloadJson: Payload(deadlineText: "20.07.2026 18:00")), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Equal(0, handler.RequestCount);
         Assert.Contains("template mapping", result.ErrorMessage);
     }
@@ -152,6 +153,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
         var result = await provider.SendAsync(Message(typeCode: NotificationTypeCodes.DepositDeadlineReminder), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Equal(0, handler.RequestCount);
         Assert.Contains("requires a deposit deadline", result.ErrorMessage);
     }
@@ -181,9 +183,26 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
         var result = await provider.SendAsync(Message(), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Contains("HTTP 400", result.ErrorMessage);
         Assert.Contains("131000", result.ErrorMessage);
         Assert.Contains("Invalid parameter", result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    public async Task TransientMetaHttpResponsesAreRetryable(HttpStatusCode statusCode)
+    {
+        var handler = new CaptureHandler(_ => JsonResponse(statusCode, ErrorJson(131000, "Temporary Meta failure")));
+        var provider = Provider(handler);
+
+        var result = await provider.SendAsync(Message(), default);
+
+        Assert.False(result.Success);
+        Assert.True(result.IsRetryable);
+        Assert.Contains($"HTTP {(int)statusCode}", result.ErrorMessage);
     }
 
     [Fact]
@@ -195,6 +214,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
         var result = await provider.SendAsync(Message(), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Contains("HTTP 403", result.ErrorMessage);
         Assert.Contains("190", result.ErrorMessage);
         Assert.Contains("Invalid OAuth access token", result.ErrorMessage);
@@ -209,6 +229,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
         var result = await provider.SendAsync(Message(), default);
 
         Assert.False(result.Success);
+        Assert.True(result.IsRetryable);
         Assert.Contains("Network unavailable", result.ErrorMessage);
     }
 
@@ -225,6 +246,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
         var result = await provider.SendAsync(Message(to: phone), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Equal(0, handler.RequestCount);
         Assert.Contains("phone number", result.ErrorMessage);
     }
@@ -300,6 +322,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
             payloadJson: Payload(deadlineText: "20.07.2026 18:00")), default);
 
         Assert.False(result.Success);
+        Assert.False(result.IsRetryable);
         Assert.Contains("HTTP 400", result.ErrorMessage);
         Assert.Contains("132000", result.ErrorMessage);
         Assert.Contains("Template parameter mismatch", result.ErrorMessage);

@@ -5,4 +5,4 @@ public sealed class ProcessPendingNotificationsRequest
     public int? BatchSize { get; set; }
 }
 
-public sealed record ProcessPendingNotificationsResponse(int Processed, int Sent, int Failed);
+public sealed record ProcessPendingNotificationsResponse(int Processed, int Sent, int Failed, int Retried);
