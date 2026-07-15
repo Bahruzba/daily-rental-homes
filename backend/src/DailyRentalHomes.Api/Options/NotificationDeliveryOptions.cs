@@ -17,4 +17,6 @@ public sealed class MetaWhatsAppOptions
     public string ApiVersion { get; set; } = string.Empty;
     public string WebhookVerifyToken { get; set; } = string.Empty;
     public string AppSecret { get; set; } = string.Empty;
+    public string DefaultLanguageCode { get; set; } = "az";
+    public Dictionary<string, string> Templates { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using DailyRentalHomes.Api.Options;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using Microsoft.Extensions.Options;
 
@@ -33,20 +34,15 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
             return NotificationDeliveryResult.Failed("Meta WhatsApp destination phone number is missing or invalid.");
         }
 
+        var payload = BuildRequestPayload(message, destination);
+        if (!string.IsNullOrWhiteSpace(payload.ErrorMessage))
+        {
+            return NotificationDeliveryResult.Failed(payload.ErrorMessage);
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildMessagesUri());
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.AccessToken);
-        request.Content = JsonContent(new
-        {
-            messaging_product = "whatsapp",
-            recipient_type = "individual",
-            to = destination,
-            type = "text",
-            text = new
-            {
-                preview_url = false,
-                body = BuildMessageBody(message)
-            }
-        });
+        request.Content = JsonContent(payload.Value!);
 
         HttpResponseMessage response;
         string responseText;
@@ -140,6 +136,159 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
         return $"{message.Title.Trim()}\n\n{message.Text.Trim()}";
     }
 
+    private MetaWhatsAppRequestPayload BuildRequestPayload(OutboundMessage message, string destination)
+    {
+        if (!TryGetTemplateName(message.TypeCode, out var templateName, out var configuredAsTemplate))
+        {
+            return new MetaWhatsAppRequestPayload(null,
+                $"Meta WhatsApp template mapping for notification type '{message.TypeCode}' is empty.");
+        }
+
+        if (configuredAsTemplate)
+        {
+            if (!TryBuildTemplateParameters(message, out var parameters, out var errorMessage))
+            {
+                return new MetaWhatsAppRequestPayload(null, errorMessage);
+            }
+
+            var template = new Dictionary<string, object?>
+            {
+                ["name"] = templateName,
+                ["language"] = new { code = GetLanguageCode() }
+            };
+
+            if (parameters.Count > 0)
+            {
+                template["components"] = new object[]
+                {
+                    new
+                    {
+                        type = "body",
+                        parameters = parameters.Select(value => new { type = "text", text = value }).ToArray()
+                    }
+                };
+            }
+
+            return new MetaWhatsAppRequestPayload(new Dictionary<string, object?>
+            {
+                ["messaging_product"] = "whatsapp",
+                ["recipient_type"] = "individual",
+                ["to"] = destination,
+                ["type"] = "template",
+                ["template"] = template
+            }, null);
+        }
+
+        return new MetaWhatsAppRequestPayload(new
+        {
+            messaging_product = "whatsapp",
+            recipient_type = "individual",
+            to = destination,
+            type = "text",
+            text = new
+            {
+                preview_url = false,
+                body = BuildMessageBody(message)
+            }
+        }, null);
+    }
+
+    private bool TryGetTemplateName(string notificationType, out string templateName, out bool configuredAsTemplate)
+    {
+        templateName = string.Empty;
+        configuredAsTemplate = false;
+
+        if (!_options.Templates.TryGetValue(notificationType, out var configuredTemplate))
+        {
+            return true;
+        }
+
+        configuredAsTemplate = true;
+        if (string.IsNullOrWhiteSpace(configuredTemplate))
+        {
+            return false;
+        }
+
+        templateName = configuredTemplate.Trim();
+        return true;
+    }
+
+    private bool TryBuildTemplateParameters(
+        OutboundMessage message,
+        out IReadOnlyList<string> parameters,
+        out string? errorMessage)
+    {
+        var payload = ReadTemplatePayload(message);
+        if (message.TypeCode is NotificationTypeCodes.DepositDeadlineReminder or NotificationTypeCodes.DepositDeadlineExtended)
+        {
+            var deadline = payload.DeadlineText;
+            if (string.IsNullOrWhiteSpace(deadline))
+            {
+                parameters = [];
+                errorMessage = $"Meta WhatsApp template notification '{message.TypeCode}' requires a deposit deadline parameter.";
+                return false;
+            }
+
+            var values = new List<string> { deadline };
+            if (message.TypeCode == NotificationTypeCodes.DepositDeadlineExtended &&
+                !string.IsNullOrWhiteSpace(payload.DeadlineExtensionReason))
+            {
+                values.Add(payload.DeadlineExtensionReason);
+            }
+
+            parameters = values;
+            errorMessage = null;
+            return true;
+        }
+
+        parameters = [];
+        errorMessage = null;
+        return true;
+    }
+
+    private static MetaWhatsAppTemplatePayload ReadTemplatePayload(OutboundMessage message)
+    {
+        string? deadlineText = null;
+        string? reason = null;
+
+        if (!string.IsNullOrWhiteSpace(message.PayloadJson))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(message.PayloadJson);
+                deadlineText = GetString(document.RootElement, "deadlineText");
+                reason = GetString(document.RootElement, "deadlineExtensionReason");
+
+                if (string.IsNullOrWhiteSpace(deadlineText) &&
+                    document.RootElement.TryGetProperty("deadlineAt", out var deadlineAt) &&
+                    deadlineAt.ValueKind == JsonValueKind.String &&
+                    DateTime.TryParse(deadlineAt.GetString(), out var parsedDeadline))
+                {
+                    deadlineText = parsedDeadline.ToString("dd.MM.yyyy HH:mm");
+                }
+            }
+            catch (JsonException)
+            {
+                // Missing/invalid structured metadata is handled by required-parameter validation below.
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(deadlineText) && message.BookingDeposit?.DeadlineAt is DateTime deadline)
+        {
+            deadlineText = deadline.ToString("dd.MM.yyyy HH:mm");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            reason = message.BookingDeposit?.DeadlineExtensionReason;
+        }
+
+        return new MetaWhatsAppTemplatePayload(deadlineText, reason);
+    }
+
+    private string GetLanguageCode() =>
+        string.IsNullOrWhiteSpace(_options.DefaultLanguageCode) ? "az" : _options.DefaultLanguageCode.Trim();
+
     private static string? TryReadMessageId(string responseText)
     {
         try
@@ -210,4 +359,6 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
         prefix is "50" or "51" or "55" or "70" or "77" or "99";
 
     private sealed record MetaWhatsAppError(string? Message, string? Type, int? Code, int? Subcode);
+    private sealed record MetaWhatsAppRequestPayload(object? Value, string? ErrorMessage);
+    private sealed record MetaWhatsAppTemplatePayload(string? DeadlineText, string? DeadlineExtensionReason);
 }

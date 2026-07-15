@@ -501,7 +501,57 @@ Supported Meta delivery statuses:
 
 Webhook status state is stored on the existing outbox row using `provider_delivery_status`, `provider_status_updated_at`, `delivered_at`, and `read_at`. `sent` keeps/sets `sent_at`; `failed` sets the existing outbox status to `failed` and stores useful provider error code/title/message details in `error_message`. Status handling is idempotent and ordered: later lifecycle states are not regressed by duplicate or earlier events, so `read` is not overwritten by a later `sent` webhook. Multiple status entries in one payload are processed independently where practical; malformed/unrelated entries are skipped without corrupting valid entries.
 
-Production WhatsApp messaging may require approved templates depending on Meta account status, conversation window, and business messaging rules. This backend currently sends plain text messages through the configured provider and leaves template management, richer delivery receipts, rate limiting, and production retry/idempotency strategy for later work.
+Meta WhatsApp template delivery is supported for selected notification outbox type codes. The delivery pipeline still processes the same `outbound_messages` rows; the Meta provider only changes the outbound Graph API request format when a notification type has a configured template mapping. Unsupported notification types continue to use the existing plain-text WhatsApp request.
+
+Template configuration example:
+
+```json
+"NotificationDelivery": {
+  "Provider": "MetaWhatsApp",
+  "MetaWhatsApp": {
+    "PhoneNumberId": "YOUR_META_PHONE_NUMBER_ID",
+    "AccessToken": "DO_NOT_COMMIT_REAL_TOKENS",
+    "ApiVersion": "v22.0",
+    "WebhookVerifyToken": "DO_NOT_COMMIT_REAL_TOKENS",
+    "AppSecret": "DO_NOT_COMMIT_REAL_SECRETS",
+    "DefaultLanguageCode": "az",
+    "Templates": {
+      "deposit_deadline_reminder": "deposit_deadline_reminder",
+      "deposit_deadline_extended": "deposit_deadline_extended"
+    }
+  }
+}
+```
+
+Environment variable override example:
+
+```bash
+NotificationDelivery__MetaWhatsApp__DefaultLanguageCode=az
+NotificationDelivery__MetaWhatsApp__Templates__deposit_deadline_reminder=deposit_deadline_reminder
+NotificationDelivery__MetaWhatsApp__Templates__deposit_deadline_extended=deposit_deadline_extended
+```
+
+Current template-backed notification types:
+
+- `deposit_deadline_reminder`
+- `deposit_deadline_extended`
+
+Expected body parameter contracts:
+
+- `deposit_deadline_reminder`: one text parameter, the current deposit deadline formatted for users.
+- `deposit_deadline_extended`: one text parameter for the new deposit deadline, plus a second text parameter for the extension reason when a reason exists. Configure the approved Meta template to match the parameter count you expect to send.
+
+Template names are configuration-driven and are not known by booking/deposit business logic. Deposit deadline notifications store reusable structured outbox metadata (`deadlineAt`, formatted `deadlineText`, and optional `deadlineExtensionReason`) so the provider does not parse human-readable Azerbaijani message text to reconstruct template variables.
+
+Fallback and safety behavior:
+
+- If a notification type has no template mapping, Meta delivery uses the existing plain-text request format.
+- If a notification type has a template mapping but the configured template name is empty, provider delivery fails safely and the outbox row follows the existing failed-message path.
+- If a mapped template notification is missing required structured parameters, provider delivery fails safely instead of silently sending malformed template requests or falling back to plain text.
+
+Templates must already exist and be approved in the Meta WhatsApp account. This backend does not create, update, delete, or validate Meta templates, and does not add Admin template-management UI, inbound chat, automated replies, SMS/email fallback, or a new messaging system.
+
+Production WhatsApp messaging may require approved templates depending on Meta account status, conversation window, and business messaging rules. Richer delivery receipts, rate limiting, and production retry/idempotency strategy remain future work.
 
 Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
 
