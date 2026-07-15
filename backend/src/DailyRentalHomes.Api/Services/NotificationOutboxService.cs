@@ -71,6 +71,15 @@ public sealed class NotificationOutboxService : INotificationOutboxService
         return Task.CompletedTask;
     }
 
+    public Task QueueDepositDeadlineReminderAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
+    {
+        Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
+            NotificationTypeCodes.DepositDeadlineReminder, "Beh üçün son tarix yaxınlaşır",
+            $"Rezervasiya #{booking.Id} üzrə beh ödənişinin son tarixi {deposit.DeadlineAt:dd.MM.yyyy HH:mm}-dır.",
+            booking, deposit, DateTime.UtcNow);
+        return Task.CompletedTask;
+    }
+
     public Task QueueDepositDeadlineExtendedAsync(Booking booking, BookingDeposit deposit, CancellationToken cancellationToken)
     {
         var message = $"Rezervasiya üçün beh göndərmə müddəti {deposit.DeadlineAt:dd.MM.yyyy HH:mm} tarixinədək uzadıldı.";
