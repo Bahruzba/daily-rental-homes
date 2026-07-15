@@ -308,13 +308,14 @@ The processor queues customer `deposit_deadline_reminder` outbox records for dep
 
 ```json
 "DepositReminderOptions": {
-  "ReminderBeforeHours": 24
+  "ReminderBeforeHours": 24,
+  "ProcessingIntervalMinutes": 15
 }
 ```
 
 Duplicate protection reuses the existing `outbound_messages` table: a reminder is considered already queued when the same deposit already has a `deposit_deadline_reminder` message containing the current effective deadline. Running the manual processor repeatedly does not queue duplicates for the same deadline. If a broker later extends the deposit deadline, the new deadline is treated as a new reminder cycle and can queue a new reminder when it enters the configured window.
 
-Reminder processing is notification-only. It does not change booking status, deposit status, deposit amount, deadline extension metadata, refunds, or availability. Automatic background execution is intentionally not included yet; a later worker PR should call the same processing service. No real WhatsApp/SMS message is sent directly by this processor.
+Reminder processing is notification-only. It does not change booking status, deposit status, deposit amount, deadline extension metadata, refunds, or availability. `DepositDeadlineReminderWorker` automatically runs the same processing service in the background every `ProcessingIntervalMinutes` minutes. Very small or invalid intervals are clamped to a safe minimum of one minute so configuration mistakes do not create a tight database loop. The Admin manual endpoint remains available as an operational fallback for local/support use. Reminders are queued through the existing notification outbox; this worker does not send WhatsApp/SMS/email directly.
 
 Customer cancellation requests are stored in `booking_cancellation_requests`. `POST /api/account/bookings/{id}/cancellation-requests` accepts optional JSON `{ "reason": "..." }`; reason is limited to 1000 characters. Customers can request cancellation only for their own active bookings in `pending`, `waiting_deposit`, `confirmed`, or `paid`. `completed`, `rejected`, and `cancelled` bookings return `400 Bad Request`. If the booking is not owned by the customer, the API returns the existing not-found behavior. A duplicate active `pending` cancellation request returns `400 Bad Request` with a readable message.
 
