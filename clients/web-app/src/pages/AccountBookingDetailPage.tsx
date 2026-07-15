@@ -239,6 +239,12 @@ export function AccountBookingDetailPage() {
                       <div><span>Kart sahibi</span><strong>{booking.deposit.cardHolderName || '—'}</strong></div>
                       <div><span>Maskalanmış kart</span><strong>{booking.deposit.cardPanMasked || '—'}</strong></div>
                       <div><span>Bank</span><strong>{booking.deposit.bankName || '—'}</strong></div>
+                      {booking.deposit.deadlineExtendedAt && (
+                        <div><span>Uzadılma vaxtı</span><strong>{dateTime.format(new Date(booking.deposit.deadlineExtendedAt))}</strong></div>
+                      )}
+                      {booking.deposit.deadlineExtensionReason && (
+                        <p className="deposit-instruction">Uzadılma səbəbi: {booking.deposit.deadlineExtensionReason}</p>
+                      )}
                       {booking.deposit.note && <p className="deposit-instruction">{booking.deposit.note}</p>}
                       {booking.deposit.reviewNote && <p className="deposit-review-note">Broker qeydi: {booking.deposit.reviewNote}</p>}
                       {booking.deposit.receipt && (
