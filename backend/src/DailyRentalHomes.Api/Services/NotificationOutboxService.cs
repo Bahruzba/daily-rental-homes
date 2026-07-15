@@ -65,7 +65,7 @@ public sealed class NotificationOutboxService : INotificationOutboxService
             Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
                 NotificationTypeCodes.DepositDeadlineReminder, "Beh üçün son tarix yaxınlaşır",
                 $"Rezervasiya #{booking.Id} üzrə beh ödənişinin son tarixi {deposit.DeadlineAt:dd.MM.yyyy HH:mm}-dır.",
-                booking, deposit, reminderAt.Value);
+                booking, deposit, reminderAt.Value, DepositPayload(booking, deposit, NotificationTypeCodes.DepositDeadlineReminder));
         }
 
         return Task.CompletedTask;
@@ -76,7 +76,7 @@ public sealed class NotificationOutboxService : INotificationOutboxService
         Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
             NotificationTypeCodes.DepositDeadlineReminder, "Beh üçün son tarix yaxınlaşır",
             $"Rezervasiya #{booking.Id} üzrə beh ödənişinin son tarixi {deposit.DeadlineAt:dd.MM.yyyy HH:mm}-dır.",
-            booking, deposit, DateTime.UtcNow);
+            booking, deposit, DateTime.UtcNow, DepositPayload(booking, deposit, NotificationTypeCodes.DepositDeadlineReminder));
         return Task.CompletedTask;
     }
 
@@ -90,7 +90,7 @@ public sealed class NotificationOutboxService : INotificationOutboxService
 
         Queue(booking.CustomerUserId, booking.CustomerFullName, booking.CustomerPhoneNumber,
             NotificationTypeCodes.DepositDeadlineExtended, "Beh müddəti uzadıldı",
-            message, booking, deposit, DateTime.UtcNow);
+            message, booking, deposit, DateTime.UtcNow, DepositPayload(booking, deposit, NotificationTypeCodes.DepositDeadlineExtended));
         return Task.CompletedTask;
     }
 
@@ -149,7 +149,7 @@ public sealed class NotificationOutboxService : INotificationOutboxService
         .FirstOrDefaultAsync(user => user.Id == userId && user.IsActive, cancellationToken);
 
     private void Queue(long? userId, string? name, string phone, string type, string title, string message,
-        Booking booking, BookingDeposit? deposit, DateTime scheduledAt)
+        Booking booking, BookingDeposit? deposit, DateTime scheduledAt, object? payload = null)
     {
         if (string.IsNullOrWhiteSpace(phone)) return;
         _db.OutboundMessages.Add(new OutboundMessage
@@ -165,7 +165,17 @@ public sealed class NotificationOutboxService : INotificationOutboxService
             ScheduledAt = scheduledAt,
             Booking = booking,
             BookingDeposit = deposit,
-            PayloadJson = JsonSerializer.Serialize(new { bookingId = booking.Id, depositId = deposit?.Id, type })
+            PayloadJson = JsonSerializer.Serialize(payload ?? new { bookingId = booking.Id, depositId = deposit?.Id, type })
         });
     }
+
+    private static object DepositPayload(Booking booking, BookingDeposit deposit, string type) => new
+    {
+        bookingId = booking.Id,
+        depositId = deposit.Id,
+        type,
+        deadlineAt = deposit.DeadlineAt,
+        deadlineText = deposit.DeadlineAt?.ToString("dd.MM.yyyy HH:mm"),
+        deadlineExtensionReason = deposit.DeadlineExtensionReason
+    };
 }
