@@ -54,7 +54,10 @@ Important environment variables:
 - `Notifications__WorkerEnabled` — defaults to `false`.
 - `Notifications__PollSeconds` — defaults to `30`.
 - `Notifications__BatchSize` — defaults to `20`.
-- `NotificationDelivery__Provider` — selects the outbox delivery provider. The only provider implemented now is `Fake`, which is also the default.
+- `NotificationDelivery__Provider` — selects the outbox delivery provider. Supported values are `Fake` and `MetaWhatsApp`; the default is `Fake`.
+- `NotificationDelivery__MetaWhatsApp__PhoneNumberId` — Meta WhatsApp Cloud API phone number id, required only when `Provider=MetaWhatsApp`.
+- `NotificationDelivery__MetaWhatsApp__AccessToken` — Meta Graph API access token, required only when `Provider=MetaWhatsApp`; never commit real tokens.
+- `NotificationDelivery__MetaWhatsApp__ApiVersion` — Meta Graph API version such as `v22.0`, required only when `Provider=MetaWhatsApp`.
 
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
 
@@ -417,7 +420,36 @@ Notification delivery foundation uses `INotificationDeliveryProvider` and the de
 }
 ```
 
-Only `Fake` is implemented in this build. The fake provider does not call external WhatsApp/SMS/email APIs, does not need vendor credentials, and is safe for local development and tests. Normal pending messages are marked as `sent`, `sent_at` is set, and `provider_message_id` is stored as `fake-{outboxId}`. If title, text, recipient name, or recipient phone contains `FAIL_FAKE_PROVIDER`, the message is marked as `failed` and `error_message` is populated.
+Supported providers:
+
+- `Fake` — default for local development and automated tests.
+- `MetaWhatsApp` — sends due outbox records through Meta WhatsApp Cloud API.
+
+The fake provider does not call external WhatsApp/SMS/email APIs, does not need vendor credentials, and is safe for local development and tests. Normal pending messages are marked as `sent`, `sent_at` is set, and `provider_message_id` is stored as `fake-{outboxId}`. If title, text, recipient name, or recipient phone contains `FAIL_FAKE_PROVIDER`, the message is marked as `failed` and `error_message` is populated.
+
+Meta WhatsApp configuration example:
+
+```json
+"NotificationDelivery": {
+  "Provider": "MetaWhatsApp",
+  "MetaWhatsApp": {
+    "PhoneNumberId": "YOUR_META_PHONE_NUMBER_ID",
+    "AccessToken": "DO_NOT_COMMIT_REAL_TOKENS",
+    "ApiVersion": "v22.0"
+  }
+}
+```
+
+Environment variable override example:
+
+```bash
+NotificationDelivery__Provider=MetaWhatsApp
+NotificationDelivery__MetaWhatsApp__PhoneNumberId=YOUR_META_PHONE_NUMBER_ID
+NotificationDelivery__MetaWhatsApp__AccessToken=YOUR_SECRET_TOKEN
+NotificationDelivery__MetaWhatsApp__ApiVersion=v22.0
+```
+
+When `MetaWhatsApp` is selected, missing phone number id, access token, or API version fails configuration validation clearly. The API posts plain text messages to Meta Graph API `/{apiVersion}/{phoneNumberId}/messages` with `messaging_product = whatsapp`, `recipient_type = individual`, and `type = text`. The provider combines the outbox title and text into the WhatsApp text body, normalizes common Azerbaijani phone formats to international digits, stores Meta's returned message id when available, and maps Meta HTTP/error responses into the existing failed outbox path. Access tokens and full Authorization headers are not logged.
 
 The background worker is registered but disabled by default:
 
@@ -441,11 +473,13 @@ Optional body:
 }
 ```
 
-The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Manual Admin processing and the background worker use the same provider-backed delivery path; there is no separate Admin-only delivery implementation. Messages are never deleted by delivery processing. This is still a fake-provider foundation; real WhatsApp/SMS/email integration, vendor SDK packages, provider credentials, templates, and production throttling are intentionally outside this scope. A real provider can be added later without changing the booking/deposit/cancellation notification business rules that queue outbox messages.
+The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Manual Admin processing and the background worker use the same provider-backed delivery path; there is no separate Admin-only delivery implementation. Messages are never deleted by delivery processing. This PR does not add Meta webhooks, inbound WhatsApp messages, template CRUD, SMS/email fallback, or a second retry framework.
+
+Production WhatsApp messaging may require approved templates depending on Meta account status, conversation window, and business messaging rules. This backend currently sends plain text messages through the configured provider and leaves template management, status webhooks, delivery receipts, rate limiting, and production retry/idempotency strategy for later work.
 
 Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
 
-Production still requires a real WhatsApp/SMS provider worker, retry/backoff and idempotency strategy, delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
+Production still requires template governance where needed, retry/backoff and idempotency strategy, delivery receipts/webhooks, rate limits, observability, retention, and protection of recipient/payload personal data.
 
 ### Dictionaries and related data
 
