@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using DailyRentalHomes.Api.Options;
 using DailyRentalHomes.Api.Services;
@@ -43,19 +44,61 @@ public sealed class MetaWhatsAppWebhookController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Receive([FromBody] JsonElement payload, CancellationToken cancellationToken)
+    public async Task<IActionResult> Receive(CancellationToken cancellationToken)
     {
-        if (payload.ValueKind is not JsonValueKind.Object)
+        if (string.IsNullOrWhiteSpace(_options.AppSecret))
+        {
+            _logger.LogError("Meta WhatsApp webhook AppSecret is not configured.");
+            return StatusCode(StatusCodes.Status500InternalServerError);
+        }
+
+        await using var buffer = new MemoryStream();
+        await Request.Body.CopyToAsync(buffer, cancellationToken);
+        var rawBody = buffer.ToArray();
+        var signature = Request.Headers["X-Hub-Signature-256"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(signature))
+        {
+            _logger.LogWarning("Meta WhatsApp webhook request rejected because signature header is missing.");
+            return Unauthorized();
+        }
+
+        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Meta WhatsApp webhook request rejected because signature header is malformed.");
+            return Unauthorized();
+        }
+
+        if (!MetaWhatsAppWebhookSignatureValidator.TryValidate(signature, _options.AppSecret, rawBody))
+        {
+            _logger.LogWarning("Meta WhatsApp webhook request rejected because signature validation failed.");
+            return Unauthorized();
+        }
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(rawBody);
+        }
+        catch (JsonException)
         {
             return BadRequest();
         }
 
-        var result = await _webhookService.ProcessAsync(payload, cancellationToken);
-        return Ok(new
+        using (document)
         {
-            received = result.Received,
-            updated = result.Updated,
-            ignored = result.Ignored
-        });
+            var payload = document.RootElement;
+            if (payload.ValueKind is not JsonValueKind.Object)
+            {
+                return BadRequest();
+            }
+
+            var result = await _webhookService.ProcessAsync(payload, cancellationToken);
+            return Ok(new
+            {
+                received = result.Received,
+                updated = result.Updated,
+                ignored = result.Ignored
+            });
+        }
     }
 }

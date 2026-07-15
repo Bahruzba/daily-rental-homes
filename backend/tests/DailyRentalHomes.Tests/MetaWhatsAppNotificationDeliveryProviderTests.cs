@@ -189,7 +189,8 @@ public sealed class MetaWhatsAppNotificationDeliveryProviderTests
                 [$"{NotificationDeliveryOptions.SectionName}:Provider"] = provider,
                 [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:PhoneNumberId"] = "123456789",
                 [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:AccessToken"] = AccessToken,
-                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:ApiVersion"] = "v22.0"
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:ApiVersion"] = "v22.0",
+                [$"{NotificationDeliveryOptions.SectionName}:MetaWhatsApp:AppSecret"] = "test-app-secret"
             })
             .Build();
 

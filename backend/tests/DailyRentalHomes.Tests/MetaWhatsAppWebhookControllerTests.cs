@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text;
 using DailyRentalHomes.Api.Controllers;
 using DailyRentalHomes.Api.Options;
 using DailyRentalHomes.Api.Services;
@@ -16,6 +17,7 @@ namespace DailyRentalHomes.Tests;
 public sealed class MetaWhatsAppWebhookControllerTests
 {
     private const string VerifyToken = "verify-secret";
+    private const string AppSecret = "test-app-secret";
 
     [Fact]
     public void ValidWebhookVerificationReturnsChallenge()
@@ -54,6 +56,90 @@ public sealed class MetaWhatsAppWebhookControllerTests
         Assert.Equal(MessageStatus.Sent, message.Status);
         Assert.Equal(Unix("1720000000"), message.SentAt);
         Assert.Equal(Unix("1720000000"), message.ProviderStatusUpdatedAt);
+    }
+
+    [Fact]
+    public async Task ValidSignatureAllowsWebhookProcessing()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.valid-signature", includeSentAt: false));
+        await context.SaveChangesAsync();
+
+        var result = await Post(context, StatusPayload("wamid.valid-signature", "sent", "1720000000"));
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("sent", (await context.OutboundMessages.SingleAsync()).ProviderDeliveryStatus);
+    }
+
+    [Fact]
+    public async Task MissingSignatureIsRejected()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.missing"));
+        await context.SaveChangesAsync();
+
+        var result = await PostWithSignature(context, StatusPayload("wamid.missing", "sent", "1720000000"), signature: null);
+
+        Assert.IsType<UnauthorizedResult>(result);
+        Assert.Null((await context.OutboundMessages.SingleAsync()).ProviderDeliveryStatus);
+    }
+
+    [Fact]
+    public async Task MalformedSignatureIsRejected()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.malformed"));
+        await context.SaveChangesAsync();
+
+        var result = await PostWithSignature(context, StatusPayload("wamid.malformed", "sent", "1720000000"), "sha1=bad");
+
+        Assert.IsType<UnauthorizedResult>(result);
+        Assert.Null((await context.OutboundMessages.SingleAsync()).ProviderDeliveryStatus);
+    }
+
+    [Fact]
+    public async Task InvalidSignatureIsRejectedAndDoesNotModifyNotificationState()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.invalid"));
+        await context.SaveChangesAsync();
+
+        var result = await PostWithSignature(context, StatusPayload("wamid.invalid", "sent", "1720000000"), "sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+        Assert.IsType<UnauthorizedResult>(result);
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Null(message.ProviderDeliveryStatus);
+        Assert.Null(message.ProviderStatusUpdatedAt);
+    }
+
+    [Fact]
+    public async Task SignatureIsCalculatedFromExactRawRequestBody()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.raw", includeSentAt: false));
+        await context.SaveChangesAsync();
+        var payload = StatusPayload("wamid.raw", "sent", "1720000000");
+        var signature = Sign(payload);
+
+        var result = await PostWithSignature(context, payload, signature);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal("sent", (await context.OutboundMessages.SingleAsync()).ProviderDeliveryStatus);
+    }
+
+    [Fact]
+    public async Task ModifiedPayloadWithOriginalSignatureIsRejected()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message("wamid.modified"));
+        await context.SaveChangesAsync();
+        var originalPayload = StatusPayload("wamid.modified", "sent", "1720000000");
+        var modifiedPayload = StatusPayload("wamid.modified", "delivered", "1720000100");
+
+        var result = await PostWithSignature(context, modifiedPayload, Sign(originalPayload));
+
+        Assert.IsType<UnauthorizedResult>(result);
+        Assert.Null((await context.OutboundMessages.SingleAsync()).ProviderDeliveryStatus);
     }
 
     [Fact]
@@ -189,6 +275,22 @@ public sealed class MetaWhatsAppWebhookControllerTests
         Assert.DoesNotContain(VerifyToken, string.Join(Environment.NewLine, logger.Messages));
     }
 
+    [Fact]
+    public async Task AppSecretIsNotExposedInSignatureRejectionLogs()
+    {
+        await using var context = CreateContext();
+        var logger = new CaptureLogger<MetaWhatsAppWebhookController>();
+        var controller = Controller(context, logger);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(StatusPayload("wamid.secret", "sent", "1720000000")));
+        httpContext.Request.Headers["X-Hub-Signature-256"] = "sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        await controller.Receive(default);
+
+        Assert.DoesNotContain(AppSecret, string.Join(Environment.NewLine, logger.Messages));
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -205,14 +307,36 @@ public sealed class MetaWhatsAppWebhookControllerTests
             {
                 MetaWhatsApp = new MetaWhatsAppOptions
                 {
-                    WebhookVerifyToken = VerifyToken
+                    WebhookVerifyToken = VerifyToken,
+                    AppSecret = AppSecret
                 }
             }),
             new MetaWhatsAppWebhookService(context, new CaptureLogger<MetaWhatsAppWebhookService>()),
             logger ?? new CaptureLogger<MetaWhatsAppWebhookController>());
 
     private static Task<IActionResult> Post(AppDbContext context, string json) =>
-        Controller(context).Receive(JsonDocument.Parse(json).RootElement, default);
+        PostWithSignature(context, json, Sign(json));
+
+    private static Task<IActionResult> PostWithSignature(AppDbContext context, string json, string? signature)
+    {
+        var controller = Controller(context);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        if (signature is not null)
+        {
+            httpContext.Request.Headers["X-Hub-Signature-256"] = signature;
+        }
+
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = httpContext
+        };
+
+        return controller.Receive(default);
+    }
+
+    private static string Sign(string json) =>
+        MetaWhatsAppWebhookSignatureValidator.SignForTests(AppSecret, json);
 
     private static OutboundMessage Message(string providerMessageId, bool includeSentAt = true) => new()
     {

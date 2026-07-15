@@ -59,6 +59,7 @@ Important environment variables:
 - `NotificationDelivery__MetaWhatsApp__AccessToken` — Meta Graph API access token, required only when `Provider=MetaWhatsApp`; never commit real tokens.
 - `NotificationDelivery__MetaWhatsApp__ApiVersion` — Meta Graph API version such as `v22.0`, required only when `Provider=MetaWhatsApp`.
 - `NotificationDelivery__MetaWhatsApp__WebhookVerifyToken` — Meta webhook verification token used by `GET /api/webhooks/meta-whatsapp`; never commit real tokens.
+- `NotificationDelivery__MetaWhatsApp__AppSecret` — Meta App Secret used to validate `X-Hub-Signature-256` on webhook POST requests; required when `Provider=MetaWhatsApp`; never commit real secrets.
 
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
 
@@ -437,7 +438,8 @@ Meta WhatsApp configuration example:
     "PhoneNumberId": "YOUR_META_PHONE_NUMBER_ID",
     "AccessToken": "DO_NOT_COMMIT_REAL_TOKENS",
     "ApiVersion": "v22.0",
-    "WebhookVerifyToken": "DO_NOT_COMMIT_REAL_TOKENS"
+    "WebhookVerifyToken": "DO_NOT_COMMIT_REAL_TOKENS",
+    "AppSecret": "DO_NOT_COMMIT_REAL_SECRETS"
   }
 }
 ```
@@ -450,6 +452,7 @@ NotificationDelivery__MetaWhatsApp__PhoneNumberId=YOUR_META_PHONE_NUMBER_ID
 NotificationDelivery__MetaWhatsApp__AccessToken=YOUR_SECRET_TOKEN
 NotificationDelivery__MetaWhatsApp__ApiVersion=v22.0
 NotificationDelivery__MetaWhatsApp__WebhookVerifyToken=YOUR_WEBHOOK_VERIFY_TOKEN
+NotificationDelivery__MetaWhatsApp__AppSecret=YOUR_META_APP_SECRET
 ```
 
 When `MetaWhatsApp` is selected, missing phone number id, access token, or API version fails configuration validation clearly. The API posts plain text messages to Meta Graph API `/{apiVersion}/{phoneNumberId}/messages` with `messaging_product = whatsapp`, `recipient_type = individual`, and `type = text`. The provider combines the outbox title and text into the WhatsApp text body, normalizes common Azerbaijani phone formats to international digits, stores Meta's returned message id when available, and maps Meta HTTP/error responses into the existing failed outbox path. Access tokens and full Authorization headers are not logged.
@@ -485,7 +488,9 @@ Meta WhatsApp delivery status webhooks are supported for outbound delivery visib
 
 The GET route implements Meta's webhook verification handshake with `hub.mode`, `hub.verify_token`, and `hub.challenge`. It returns the challenge only when mode is `subscribe`, the configured `WebhookVerifyToken` matches, and a challenge value is present. Invalid verification attempts return `403`; the configured verification token is never logged.
 
-The POST route processes the WhatsApp `messages` webhook `statuses[]` payload and ignores unrelated inbound customer `messages[]` payloads in this PR. Status entries are correlated only by Meta provider message id (`statuses[].id`) against the existing `outbound_messages.provider_message_id`; unknown provider ids are ignored safely and do not create new outbox rows.
+The POST route validates the `X-Hub-Signature-256` header before processing. The expected header format is `sha256=<hex digest>`. The digest is computed with HMAC SHA-256 over the exact raw HTTP request body bytes using the configured `AppSecret`, and signatures are compared using constant-time comparison. Missing, malformed, or invalid signatures return `401` and the webhook payload is not processed. The App Secret, expected signature, received signature, Authorization headers, and raw payload are not logged.
+
+After signature validation succeeds, the POST route processes the WhatsApp `messages` webhook `statuses[]` payload and ignores unrelated inbound customer `messages[]` payloads in this PR. Status entries are correlated only by Meta provider message id (`statuses[].id`) against the existing `outbound_messages.provider_message_id`; unknown provider ids are ignored safely and do not create new outbox rows.
 
 Supported Meta delivery statuses:
 
@@ -496,13 +501,11 @@ Supported Meta delivery statuses:
 
 Webhook status state is stored on the existing outbox row using `provider_delivery_status`, `provider_status_updated_at`, `delivered_at`, and `read_at`. `sent` keeps/sets `sent_at`; `failed` sets the existing outbox status to `failed` and stores useful provider error code/title/message details in `error_message`. Status handling is idempotent and ordered: later lifecycle states are not regressed by duplicate or earlier events, so `read` is not overwritten by a later `sent` webhook. Multiple status entries in one payload are processed independently where practical; malformed/unrelated entries are skipped without corrupting valid entries.
 
-Webhook signature validation with `X-Hub-Signature-256` is not implemented yet because an app secret is not currently configured. Production should add app-secret based signature validation before exposing this endpoint publicly.
-
 Production WhatsApp messaging may require approved templates depending on Meta account status, conversation window, and business messaging rules. This backend currently sends plain text messages through the configured provider and leaves template management, richer delivery receipts, rate limiting, and production retry/idempotency strategy for later work.
 
 Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
 
-Production still requires template governance where needed, request signature validation, retry/backoff and idempotency strategy, richer delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
+Production still requires template governance where needed, retry/backoff and idempotency strategy, richer delivery receipts, rate limits, observability, retention, and protection of recipient/payload personal data.
 
 ### Dictionaries and related data
 
