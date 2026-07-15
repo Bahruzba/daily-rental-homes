@@ -43,6 +43,7 @@ public sealed record BrokerBookingListItemResponse(
     DateTime CreatedAt,
     string? Note,
     bool IsDepositPending,
+    bool IsDeadlineExpired,
     bool HasPendingCancellationRequest);
 
 public sealed record BrokerBookingDetailResponse(

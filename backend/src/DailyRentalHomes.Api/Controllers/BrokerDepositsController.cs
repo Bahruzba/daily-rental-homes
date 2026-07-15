@@ -123,7 +123,7 @@ public sealed class BrokerDepositsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
         await _notifications.QueueDepositRequestedAsync(booking, deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit)));
+        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit, booking.Status?.Code)));
     }
 
     [HttpPost("extend-deadline")]
@@ -224,7 +224,7 @@ public sealed class BrokerDepositsController : ControllerBase
 
         await _notifications.QueueDepositApprovedAsync(booking, booking.Deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit)));
+        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit, booking.Status?.Code)));
     }
 
     [HttpPost("reject")]
@@ -257,7 +257,7 @@ public sealed class BrokerDepositsController : ControllerBase
 
         await _notifications.QueueDepositRejectedAsync(booking, booking.Deposit, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit)));
+        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(booking.Deposit, booking.Status?.Code)));
     }
 
     private async Task<Booking?> GetBookingWithDeposit(long bookingId, CancellationToken cancellationToken) =>

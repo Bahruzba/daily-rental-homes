@@ -70,7 +70,7 @@ public sealed class AccountController : ControllerBase
             item.Status?.Name ?? string.Empty,
             item.TotalAmount,
             item.Dates.OrderBy(date => date.Date).Select(date => date.Date).ToList(),
-            item.Deposit is null ? null : DepositResponse.FromEntity(item.Deposit),
+            item.Deposit is null ? null : DepositResponse.FromEntity(item.Deposit, item.Status?.Code),
             item.CreatedAt)).ToList();
 
         return Ok(ApiResponse<IReadOnlyList<AccountBookingListItemResponse>>.Ok(response));
@@ -171,7 +171,7 @@ public sealed class AccountController : ControllerBase
             throw;
         }
 
-        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit)));
+        return Ok(ApiResponse<DepositResponse>.Ok(DepositResponse.FromEntity(deposit, booking.Status?.Code)));
     }
 
     [HttpPost("bookings/{id:long}/cancellation-requests")]
@@ -254,7 +254,7 @@ public sealed class AccountController : ControllerBase
         booking.GuestCount,
         booking.Dates.OrderBy(date => date.Date).Select(date => date.Date).ToList(),
         booking.CustomerNote,
-        booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit),
+        booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit, booking.Status?.Code),
         booking.CreatedAt,
         booking.CancellationRequests.Any(item => item.StatusCode == CancellationRequestPending));
 

@@ -5,6 +5,7 @@ using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
+using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -120,7 +121,8 @@ public sealed class BrokerController : ControllerBase
         [FromQuery] string? status,
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
-        CancellationToken cancellationToken)
+        [FromQuery] bool? hasExpiredDepositDeadline = null,
+        CancellationToken cancellationToken = default)
     {
         if (from.HasValue && to.HasValue && from > to)
         {
@@ -131,6 +133,7 @@ public sealed class BrokerController : ControllerBase
             .Include(booking => booking.RentalHome)
             .Include(booking => booking.Status)
             .Include(booking => booking.Dates)
+            .Include(booking => booking.Deposit)
             .Include(booking => booking.CancellationRequests)
             .AsQueryable();
 
@@ -148,6 +151,28 @@ public sealed class BrokerController : ControllerBase
         if (to.HasValue)
         {
             query = query.Where(booking => booking.Dates.Any(date => date.Date <= to.Value));
+        }
+
+        if (hasExpiredDepositDeadline.HasValue)
+        {
+            var now = DateTime.UtcNow;
+            query = hasExpiredDepositDeadline.Value
+                ? query.Where(booking =>
+                    booking.Deposit != null &&
+                    booking.Deposit.DeadlineAt.HasValue &&
+                    booking.Deposit.DeadlineAt.Value < now &&
+                    booking.Deposit.Status != BookingDepositStatus.Paid &&
+                    booking.Status!.Code != BookingStatusCodes.Cancelled &&
+                    booking.Status.Code != BookingStatusCodes.Completed &&
+                    booking.Status.Code != BookingStatusCodes.Rejected)
+                : query.Where(booking =>
+                    booking.Deposit == null ||
+                    !booking.Deposit.DeadlineAt.HasValue ||
+                    booking.Deposit.DeadlineAt.Value >= now ||
+                    booking.Deposit.Status == BookingDepositStatus.Paid ||
+                    booking.Status!.Code == BookingStatusCodes.Cancelled ||
+                    booking.Status.Code == BookingStatusCodes.Completed ||
+                    booking.Status.Code == BookingStatusCodes.Rejected);
         }
 
         var bookings = await query.OrderByDescending(booking => booking.CreatedAt).ThenByDescending(booking => booking.Id).ToListAsync(cancellationToken);
@@ -502,6 +527,7 @@ public sealed class BrokerController : ControllerBase
             booking.CreatedAt,
             booking.CustomerNote,
             booking.Status?.Code == BookingStatusCodes.WaitingDeposit,
+            booking.Deposit is not null && DepositResponse.IsDeadlineExpiredFor(booking.Deposit, booking.Status?.Code),
             booking.CancellationRequests.Any(request => !request.IsDeleted && request.StatusCode == "pending"));
     }
 
@@ -515,7 +541,7 @@ public sealed class BrokerController : ControllerBase
                 item.Note,
                 item.CreatedAt))
             .ToList();
-        var deposit = booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit);
+        var deposit = booking.Deposit is null ? null : DepositResponse.FromEntity(booking.Deposit, booking.Status?.Code);
         var cancellationRequest = booking.CancellationRequests
             .Where(item => item.StatusCode == "pending")
             .OrderByDescending(item => item.CreatedAt)
