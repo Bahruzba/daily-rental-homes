@@ -102,10 +102,22 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddSingleton<AccessTokenBuilder>();
 builder.Services.AddOptions<NotificationWorkerOptions>()
     .Bind(builder.Configuration.GetSection(NotificationWorkerOptions.SectionName));
+builder.Services.AddOptions<NotificationDeliveryOptions>()
+    .Bind(builder.Configuration.GetSection(NotificationDeliveryOptions.SectionName))
+    .Validate(options => string.Equals(options.Provider, NotificationDeliveryOptions.FakeProvider, StringComparison.OrdinalIgnoreCase),
+        "Only the Fake notification delivery provider is supported in this build.")
+    .ValidateOnStart();
 builder.Services.AddOptions<DepositReminderOptions>()
     .Bind(builder.Configuration.GetSection(DepositReminderOptions.SectionName));
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
 builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDeadlineReminderProcessingService>();
+var notificationDeliveryProvider = builder.Configuration
+    .GetSection(NotificationDeliveryOptions.SectionName)
+    .Get<NotificationDeliveryOptions>()?.Provider ?? NotificationDeliveryOptions.FakeProvider;
+if (!string.Equals(notificationDeliveryProvider, NotificationDeliveryOptions.FakeProvider, StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException("Only the Fake notification delivery provider is supported in this build.");
+}
 builder.Services.AddScoped<INotificationDeliveryProvider, FakeNotificationDeliveryProvider>();
 builder.Services.AddScoped<NotificationDeliveryService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();

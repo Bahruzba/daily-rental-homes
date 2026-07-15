@@ -54,6 +54,7 @@ Important environment variables:
 - `Notifications__WorkerEnabled` — defaults to `false`.
 - `Notifications__PollSeconds` — defaults to `30`.
 - `Notifications__BatchSize` — defaults to `20`.
+- `NotificationDelivery__Provider` — selects the outbox delivery provider. The only provider implemented now is `Fake`, which is also the default.
 
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
 
@@ -408,7 +409,15 @@ The existing `outbound_messages` table is reused as the MVP notification outbox.
 
 When a deposit is requested, an immediate `deposit_requested` record is created. If the deadline is more than three hours away, `deposit_deadline_reminder` is scheduled two hours before it. If it is between 30 minutes and three hours away, the reminder is scheduled 30 minutes before it; closer deadlines skip the reminder.
 
-Notification delivery foundation uses `INotificationDeliveryProvider` and the development-safe `FakeNotificationDeliveryProvider`. The fake provider does not call external WhatsApp/SMS APIs. Normal pending messages are marked as `sent`, `sent_at` is set, and `provider_message_id` is stored as `fake-{outboxId}`. If title, text, recipient name, or recipient phone contains `FAIL_FAKE_PROVIDER`, the message is marked as `failed` and `error_message` is populated.
+Notification delivery foundation uses `INotificationDeliveryProvider` and the development-safe `FakeNotificationDeliveryProvider`. The selected provider is configured with:
+
+```json
+"NotificationDelivery": {
+  "Provider": "Fake"
+}
+```
+
+Only `Fake` is implemented in this build. The fake provider does not call external WhatsApp/SMS/email APIs, does not need vendor credentials, and is safe for local development and tests. Normal pending messages are marked as `sent`, `sent_at` is set, and `provider_message_id` is stored as `fake-{outboxId}`. If title, text, recipient name, or recipient phone contains `FAIL_FAKE_PROVIDER`, the message is marked as `failed` and `error_message` is populated.
 
 The background worker is registered but disabled by default:
 
@@ -420,7 +429,7 @@ The background worker is registered but disabled by default:
 }
 ```
 
-When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past, processes a limited batch, and logs errors without crashing the API. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
+When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past, processes a limited batch, and sends each eligible outbox row through `INotificationDeliveryProvider`. Eligibility and retry/failure decisions stay in the outbox processing layer; the provider only attempts delivery and returns success/failure details. Provider exceptions are caught, logged with the outbox message id, and converted into the existing failed-message path so one provider failure does not crash the processing pass. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
 
 - POST /api/admin/notifications/process-pending
 
@@ -432,7 +441,7 @@ Optional body:
 }
 ```
 
-The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Messages are never deleted by delivery processing. This is still a fake-provider foundation; real WhatsApp/SMS integration, retries, provider credentials, templates, and production throttling are intentionally outside this scope.
+The response contains `processed`, `sent`, and `failed`. Batch size must be between 1 and 100. Manual Admin processing and the background worker use the same provider-backed delivery path; there is no separate Admin-only delivery implementation. Messages are never deleted by delivery processing. This is still a fake-provider foundation; real WhatsApp/SMS/email integration, vendor SDK packages, provider credentials, templates, and production throttling are intentionally outside this scope. A real provider can be added later without changing the booking/deposit/cancellation notification business rules that queue outbox messages.
 
 Admin notification list responses also expose delivery result fields for UI/debugging: nullable `providerMessageId`, nullable `errorMessage`, and nullable `sentAt`. These are response-only contract fields backed by the existing outbox columns; no schema change is required.
 

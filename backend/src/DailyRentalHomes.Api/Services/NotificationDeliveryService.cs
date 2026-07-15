@@ -1,6 +1,8 @@
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DailyRentalHomes.Api.Services;
 
@@ -9,11 +11,16 @@ public sealed class NotificationDeliveryService
     private const int MaxBatchSize = 100;
     private readonly AppDbContext _db;
     private readonly INotificationDeliveryProvider _provider;
+    private readonly ILogger<NotificationDeliveryService> _logger;
 
-    public NotificationDeliveryService(AppDbContext db, INotificationDeliveryProvider provider)
+    public NotificationDeliveryService(
+        AppDbContext db,
+        INotificationDeliveryProvider provider,
+        ILogger<NotificationDeliveryService>? logger = null)
     {
         _db = db;
         _provider = provider;
+        _logger = logger ?? NullLogger<NotificationDeliveryService>.Instance;
     }
 
     public async Task<NotificationDeliverySummary> ProcessPendingAsync(int batchSize, CancellationToken cancellationToken)
@@ -33,7 +40,21 @@ public sealed class NotificationDeliveryService
 
         foreach (var message in messages)
         {
-            var result = await _provider.SendAsync(message, cancellationToken);
+            NotificationDeliveryResult result;
+            try
+            {
+                result = await _provider.SendAsync(message, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception, "Notification provider failed while processing outbound message {OutboundMessageId}.", message.Id);
+                result = NotificationDeliveryResult.Failed("Notification provider threw an unexpected error.");
+            }
+
             if (result.Success)
             {
                 message.Status = MessageStatus.Sent;

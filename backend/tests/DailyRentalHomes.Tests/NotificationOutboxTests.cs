@@ -4,6 +4,7 @@ using DailyRentalHomes.Api.Options;
 using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Api.Common;
+using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Infrastructure.Persistence;
 using DailyRentalHomes.Domain.Enums;
@@ -87,6 +88,92 @@ public sealed class NotificationOutboxTests
     }
 
     [Fact]
+    public async Task QueuedNotificationIsDeliveredThroughProviderAbstraction()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(4, "Provider test", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var provider = new RecordingNotificationDeliveryProvider(NotificationDeliveryResult.Sent("provider-123"));
+        var service = DeliveryService(context, provider);
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, provider.Calls);
+        Assert.Equal(1, summary.Sent);
+        Assert.Equal(MessageStatus.Sent, message.Status);
+        Assert.Equal("provider-123", message.ProviderMessageId);
+    }
+
+    [Fact]
+    public async Task ProviderFailureResultFollowsExistingFailureFlow()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(5, "Provider failure", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.Failed("Provider rejected message.")));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(MessageStatus.Failed, message.Status);
+        Assert.Equal("Provider rejected message.", message.ErrorMessage);
+        Assert.Null(message.ProviderMessageId);
+        Assert.Null(message.SentAt);
+    }
+
+    [Fact]
+    public async Task ProviderExceptionDoesNotCrashProcessingPass()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(6, "Provider exception", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context, new RecordingNotificationDeliveryProvider(
+            NotificationDeliveryResult.Sent("unused"),
+            throwOnSend: true));
+
+        var summary = await service.ProcessPendingAsync(20, default);
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, summary.Processed);
+        Assert.Equal(1, summary.Failed);
+        Assert.Equal(MessageStatus.Failed, message.Status);
+        Assert.Contains("unexpected error", message.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExistingNotificationTypesContinueProcessingUnchanged()
+    {
+        await using var context = CreateContext();
+        var message = Message(7, "Deposit requested", "Text", DateTime.UtcNow.AddMinutes(-1));
+        message.TypeCode = NotificationTypeCodes.DepositRequested;
+        context.OutboundMessages.Add(message);
+        await context.SaveChangesAsync();
+        var service = DeliveryService(context);
+
+        await service.ProcessPendingAsync(20, default);
+
+        var processed = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(NotificationTypeCodes.DepositRequested, processed.TypeCode);
+        Assert.Equal(MessageStatus.Sent, processed.Status);
+    }
+
+    [Fact]
+    public async Task FakeProviderDoesNotRequireExternalNetworkConfiguration()
+    {
+        var provider = new FakeNotificationDeliveryProvider();
+        var message = Message(8, "Normal", "Text", DateTime.UtcNow);
+
+        var result = await provider.SendAsync(message, default);
+
+        Assert.True(result.Success);
+        Assert.Equal("fake-8", result.ProviderMessageId);
+        Assert.Null(result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task FailureMarkerMarksNotificationFailed()
     {
         await using var context = CreateContext();
@@ -142,6 +229,25 @@ public sealed class NotificationOutboxTests
     }
 
     [Fact]
+    public async Task ManualEndpointUsesProviderAbstraction()
+    {
+        await using var context = CreateContext();
+        context.OutboundMessages.Add(Message(13, "Manual provider", "Text", DateTime.UtcNow.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var provider = new RecordingNotificationDeliveryProvider(NotificationDeliveryResult.Sent("manual-provider-13"));
+        var controller = AdminController(context, provider);
+
+        var response = GetData<ProcessPendingNotificationsResponse>(await controller.ProcessPending(
+            new ProcessPendingNotificationsRequest { BatchSize = 20 },
+            default));
+
+        var message = await context.OutboundMessages.SingleAsync();
+        Assert.Equal(1, provider.Calls);
+        Assert.Equal(1, response.Sent);
+        Assert.Equal("manual-provider-13", message.ProviderMessageId);
+    }
+
+    [Fact]
     public async Task ManualEndpointRejectsInvalidBatchSize()
     {
         await using var context = CreateContext();
@@ -185,6 +291,17 @@ public sealed class NotificationOutboxTests
         Assert.Equal(20, options.BatchSize);
     }
 
+    [Fact]
+    public void NotificationDeliveryProviderDefaultsToFake()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection([]).Build();
+        var options = new NotificationDeliveryOptions();
+
+        configuration.GetSection(NotificationDeliveryOptions.SectionName).Bind(options);
+
+        Assert.Equal(NotificationDeliveryOptions.FakeProvider, options.Provider);
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -196,7 +313,18 @@ public sealed class NotificationOutboxTests
     private static NotificationDeliveryService DeliveryService(AppDbContext context) =>
         new(context, new FakeNotificationDeliveryProvider());
 
+    private static NotificationDeliveryService DeliveryService(AppDbContext context, INotificationDeliveryProvider provider) =>
+        new(context, provider);
+
     private static AdminNotificationsController AdminController(AppDbContext context) => new(context, DeliveryService(context))
+    {
+        ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = AdminPrincipal() }
+        }
+    };
+
+    private static AdminNotificationsController AdminController(AppDbContext context, INotificationDeliveryProvider provider) => new(context, DeliveryService(context, provider))
     {
         ControllerContext = new ControllerContext
         {
@@ -226,5 +354,30 @@ public sealed class NotificationOutboxTests
         var response = Assert.IsType<ApiResponse<T>>(ok.Value);
         Assert.True(response.Success);
         return Assert.IsAssignableFrom<T>(response.Data);
+    }
+
+    private sealed class RecordingNotificationDeliveryProvider : INotificationDeliveryProvider
+    {
+        private readonly NotificationDeliveryResult _result;
+        private readonly bool _throwOnSend;
+
+        public RecordingNotificationDeliveryProvider(NotificationDeliveryResult result, bool throwOnSend = false)
+        {
+            _result = result;
+            _throwOnSend = throwOnSend;
+        }
+
+        public int Calls { get; private set; }
+
+        public Task<NotificationDeliveryResult> SendAsync(OutboundMessage message, CancellationToken cancellationToken)
+        {
+            Calls++;
+            if (_throwOnSend)
+            {
+                throw new InvalidOperationException("Provider exploded.");
+            }
+
+            return Task.FromResult(_result);
+        }
     }
 }
