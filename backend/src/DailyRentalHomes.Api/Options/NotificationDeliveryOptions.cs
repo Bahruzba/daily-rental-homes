@@ -16,4 +16,5 @@ public sealed class MetaWhatsAppOptions
     public string AccessToken { get; set; } = string.Empty;
     public string ApiVersion { get; set; } = string.Empty;
     public string WebhookVerifyToken { get; set; } = string.Empty;
+    public string AppSecret { get; set; } = string.Empty;
 }
