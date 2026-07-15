@@ -203,9 +203,9 @@ Boş filterlər endpoint-i query param olmadan çağırır. `bookingId` yalnız 
 
 Mock rejimdə Admin UI backend olmadan demo outbox data göstərir: pending `booking_created`, pending `deposit_requested`, sent `deposit_approved`, failed `booking_status_changed`. Mock filter status, type və bookingId üzrə işləyir.
 
-Admin notification səhifəsində “Bildirişləri göndər” paneli var. Admin `Batch sayı` dəyərini 1-100 aralığında seçib `Pending bildirişləri emal et` düyməsi ilə vaxtı çatmış pending mesajları fake provider vasitəsilə emal edə bilər. Live rejimdə frontend `POST /api/admin/notifications/process-pending` endpoint-ini çağırır və uğurdan sonra siyahını yeniləyir. Mock rejimdə due pending demo mesajları lokal in-memory state-də `sent` olur, `FAIL_FAKE_PROVIDER` marker-li mesaj `failed` olur, future scheduled mesaj isə pending qalır.
+Admin notification səhifəsində “Bildirişləri göndər” paneli var. Admin `Batch sayı` dəyərini 1-100 aralığında seçib `Pending bildirişləri emal et` düyməsi ilə vaxtı çatmış pending mesajları fake provider vasitəsilə emal edə bilər. Live rejimdə frontend `POST /api/admin/notifications/process-pending` endpoint-ini çağırır və uğurdan sonra siyahını yeniləyir. Failed bildirişlərdə `Yenidən göndər` düyməsi `POST /api/admin/notifications/{id}/retry` endpoint-i ilə manual retry edir. Mock rejimdə due pending demo mesajları lokal in-memory state-də `sent` olur, `FAIL_FAKE_PROVIDER` marker-li mesaj `failed` olur, future scheduled mesaj isə pending qalır; manual retry mock state-də eyni nəticəni simulyasiya edir.
 
-Siyahı delivery nəticə sahələrini göstərir: `Göndərilmə vaxtı`, `Provider ID` və `Xəta`. Bu hələ fake-provider MVP-dir; real WhatsApp/SMS provider, retry/backoff və production delivery worker UI bu mərhələdə yoxdur.
+Siyahı delivery nəticə sahələrini göstərir: `Göndərilmə vaxtı`, `Provider ID`, `Provider status`, `Xəta`, retry cəhd sayı, son cəhd və növbəti cəhd vaxtı. Bu hələ fake-provider/Meta provider MVP-dir; real WhatsApp/SMS production credential-ləri və delivery worker-in production enablement-i deployment konfiqurasiyasında ayrıca idarə olunmalıdır.
 
 Limit: ekran read-only-dir. Real WhatsApp/SMS provider, retry/send worker və manual resend əməliyyatı bu mərhələyə daxil deyil.
 

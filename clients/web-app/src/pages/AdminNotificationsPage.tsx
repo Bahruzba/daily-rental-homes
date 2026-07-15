@@ -1,7 +1,7 @@
 import { ArrowLeft, Bell, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getAdminNotifications, processPendingNotifications, type AdminNotification } from '../api/admin'
+import { getAdminNotifications, processPendingNotifications, retryAdminNotification, type AdminNotification } from '../api/admin'
 import { useAuth } from '../auth/AuthContext'
 import { AppLayout } from '../components/AppLayout'
 import { EmptyState } from '../components/EmptyState'
@@ -15,7 +15,7 @@ const dateTime = new Intl.DateTimeFormat('az-AZ', {
 })
 
 const statusOptions = ['pending', 'sent', 'failed', 'cancelled', 'skipped']
-const typeOptions = ['booking_created', 'booking_cancellation_requested', 'deposit_requested', 'deposit_approved', 'deposit_rejected', 'booking_status_changed', 'deposit_deadline_reminder']
+const typeOptions = ['booking_created', 'booking_cancellation_requested', 'deposit_requested', 'deposit_approved', 'deposit_rejected', 'booking_status_changed', 'deposit_deadline_reminder', 'deposit_deadline_extended']
 
 export function AdminNotificationsPage() {
   const { session } = useAuth()
@@ -25,6 +25,7 @@ export function AdminNotificationsPage() {
   const [bookingId, setBookingId] = useState('')
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [retryingId, setRetryingId] = useState<number | null>(null)
   const [batchSize, setBatchSize] = useState('20')
   const [error, setError] = useState('')
   const [processMessage, setProcessMessage] = useState('')
@@ -76,6 +77,23 @@ export function AdminNotificationsPage() {
       setError(cause instanceof Error ? cause.message : 'Pending bildirişlər emal edilmədi.')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  const retryNotification = async (id: number) => {
+    if (!session) return
+    setRetryingId(id)
+    setError('')
+    setProcessMessage('')
+    try {
+      const result = await retryAdminNotification(session.accessToken, id)
+      setProcessMessage(`Yenidən emal edildi: ${result.processed}, göndərildi: ${result.sent}, uğursuz: ${result.failed}, retry: ${result.retried ?? 0}`)
+      await load()
+    } catch (cause) {
+      console.error('Admin notification retry failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Bildiriş yenidən emal edilmədi.')
+    } finally {
+      setRetryingId(null)
     }
   }
 
@@ -181,11 +199,23 @@ export function AdminNotificationsPage() {
                   </div>
                   <div className="admin-notification-foot">
                     {item.scheduledAt && <span>Plan: {formatDateTime(item.scheduledAt)}</span>}
+                    <span>Cəhd: {item.deliveryAttemptCount ?? 0}</span>
+                    {item.lastAttemptAt && <span>Son cəhd: {formatDateTime(item.lastAttemptAt)}</span>}
+                    {item.nextAttemptAt && <span>Növbəti cəhd: {formatDateTime(item.nextAttemptAt)}</span>}
                     {item.providerMessageId && <span>Provider ID: {item.providerMessageId}</span>}
+                    {item.providerDeliveryStatus && <span>Provider status: {item.providerDeliveryStatus}</span>}
+                    {item.providerStatusUpdatedAt && <span>Provider status vaxtı: {formatDateTime(item.providerStatusUpdatedAt)}</span>}
+                    {item.deliveredAt && <span>Çatdırılma vaxtı: {formatDateTime(item.deliveredAt)}</span>}
+                    {item.readAt && <span>Oxunma vaxtı: {formatDateTime(item.readAt)}</span>}
                     {item.errorMessage && <span className="notification-error-text">Xəta: {item.errorMessage}</span>}
                     {item.sentAt && <span>Göndərilmə vaxtı: {formatDateTime(item.sentAt)}</span>}
                     {item.relatedBookingId && <span>Booking #{item.relatedBookingId}</span>}
                     {item.relatedDepositId && <span>Deposit #{item.relatedDepositId}</span>}
+                    {item.status === 'failed' && (
+                      <button className="button button-ghost admin-notification-retry" onClick={() => void retryNotification(item.id)} disabled={retryingId === item.id || processing || loading}>
+                        <RefreshCw size={14} /> {retryingId === item.id ? 'Yoxlanır…' : 'Yenidən göndər'}
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}
@@ -233,6 +263,7 @@ function typeLabel(value: string) {
     deposit_rejected: 'Beh rəddi',
     booking_status_changed: 'Booking status dəyişikliyi',
     deposit_deadline_reminder: 'Beh deadline xatırlatması',
+    deposit_deadline_extended: 'Beh deadline uzadıldı',
   }
   return labels[value] ?? value
 }
