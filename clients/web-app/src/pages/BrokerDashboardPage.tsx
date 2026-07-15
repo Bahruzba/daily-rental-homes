@@ -61,6 +61,7 @@ export function BrokerDashboardPage() {
   const [bookingStatus, setBookingStatus] = useState('')
   const [bookingFrom, setBookingFrom] = useState('')
   const [bookingTo, setBookingTo] = useState('')
+  const [bookingExpiredDepositOnly, setBookingExpiredDepositOnly] = useState(false)
   const [bookingLoading, setBookingLoading] = useState(false)
   const [bookingError, setBookingError] = useState('')
   const [reportFrom, setReportFrom] = useState('')
@@ -74,8 +75,8 @@ export function BrokerDashboardPage() {
   const [duplicatingHomeId, setDuplicatingHomeId] = useState<number>()
 
   const currentBookingFilters = (): BrokerBookingFilters => (
-    bookingStatus || bookingFrom || bookingTo
-      ? { status: bookingStatus || undefined, from: bookingFrom || undefined, to: bookingTo || undefined }
+    bookingStatus || bookingFrom || bookingTo || bookingExpiredDepositOnly
+      ? { status: bookingStatus || undefined, from: bookingFrom || undefined, to: bookingTo || undefined, hasExpiredDepositDeadline: bookingExpiredDepositOnly || undefined }
       : {}
   )
 
@@ -132,17 +133,18 @@ export function BrokerDashboardPage() {
     setBookingStatus('')
     setBookingFrom('')
     setBookingTo('')
+    setBookingExpiredDepositOnly(false)
     void loadBookings({})
   }
 
   const applyStatusChip = (status: string) => {
     setBookingStatus(status)
-    void loadBookings({ status: status || undefined, from: bookingFrom || undefined, to: bookingTo || undefined })
+    void loadBookings({ status: status || undefined, from: bookingFrom || undefined, to: bookingTo || undefined, hasExpiredDepositDeadline: bookingExpiredDepositOnly || undefined })
   }
 
   const showPendingDeposits = () => {
     setBookingStatus('waiting_deposit')
-    void loadBookings({ status: 'waiting_deposit', from: bookingFrom || undefined, to: bookingTo || undefined })
+    void loadBookings({ status: 'waiting_deposit', from: bookingFrom || undefined, to: bookingTo || undefined, hasExpiredDepositDeadline: bookingExpiredDepositOnly || undefined })
   }
 
   const loadReportSummary = async (from = reportFrom, to = reportTo) => {
@@ -221,6 +223,7 @@ export function BrokerDashboardPage() {
     waitingDeposit: bookings.filter((booking) => booking.statusCode === 'waiting_deposit').length,
     confirmed: bookings.filter((booking) => booking.statusCode === 'confirmed').length,
     inactive: bookings.filter((booking) => booking.statusCode === 'cancelled' || booking.statusCode === 'rejected').length,
+    expiredDeposit: bookings.filter((booking) => booking.isDeadlineExpired).length,
   }), [bookings])
 
   const filteredHomes = useMemo(() => {
@@ -410,6 +413,10 @@ export function BrokerDashboardPage() {
                     <span>Bitiş tarix</span>
                     <input type="date" value={bookingTo} onChange={(event) => setBookingTo(event.target.value)} />
                   </label>
+                  <label className="broker-checkbox-filter">
+                    <input type="checkbox" checked={bookingExpiredDepositOnly} onChange={(event) => setBookingExpiredDepositOnly(event.target.checked)} />
+                    <span>Beh vaxtı keçənlər</span>
+                  </label>
                   <button className="button button-primary" onClick={applyBookingFilters} disabled={bookingLoading}>
                     {bookingLoading ? 'Yüklənir…' : 'Tətbiq et'}
                   </button>
@@ -421,6 +428,11 @@ export function BrokerDashboardPage() {
                   <button className={bookingStatus === 'pending' ? 'active' : ''} onClick={() => applyStatusChip('pending')}>Yeni sorğu <strong>{bookingCounts.pending}</strong></button>
                   <button className={bookingStatus === 'waiting_deposit' ? 'active' : ''} onClick={() => applyStatusChip('waiting_deposit')}>Beh gözləyir <strong>{bookingCounts.waitingDeposit}</strong></button>
                   <button className={bookingStatus === 'confirmed' ? 'active' : ''} onClick={() => applyStatusChip('confirmed')}>Təsdiqlənib <strong>{bookingCounts.confirmed}</strong></button>
+                  <button className={bookingExpiredDepositOnly ? 'active' : ''} onClick={() => {
+                    const next = !bookingExpiredDepositOnly
+                    setBookingExpiredDepositOnly(next)
+                    void loadBookings({ status: bookingStatus || undefined, from: bookingFrom || undefined, to: bookingTo || undefined, hasExpiredDepositDeadline: next || undefined })
+                  }}>Beh vaxtı keçənlər <strong>{bookingCounts.expiredDeposit}</strong></button>
                   <span>Ləğv/Rədd <strong>{bookingCounts.inactive}</strong></span>
                 </div>
               </div>
@@ -449,6 +461,7 @@ export function BrokerDashboardPage() {
                       </div>
                       <div>
                         <em className={`broker-status status-${booking.statusCode}`}>{statusLabel(booking.statusCode, booking.statusName)}</em>
+                        {booking.isDeadlineExpired && <em className="broker-expired-deposit-badge">Beh vaxtı keçib</em>}
                         {booking.hasPendingCancellationRequest && <em className="broker-cancel-request-badge">Ləğv sorğusu</em>}
                         <strong>{money.format(booking.totalAmount)}</strong>
                       </div>
