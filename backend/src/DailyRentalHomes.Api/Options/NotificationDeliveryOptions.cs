@@ -8,6 +8,7 @@ public sealed class NotificationDeliveryOptions
 
     public string Provider { get; set; } = FakeProvider;
     public MetaWhatsAppOptions MetaWhatsApp { get; set; } = new();
+    public NotificationRetryOptions Retry { get; set; } = new();
 }
 
 public sealed class MetaWhatsAppOptions
@@ -19,4 +20,11 @@ public sealed class MetaWhatsAppOptions
     public string AppSecret { get; set; } = string.Empty;
     public string DefaultLanguageCode { get; set; } = "az";
     public Dictionary<string, string> Templates { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+public sealed class NotificationRetryOptions
+{
+    public int MaxAttempts { get; set; } = 5;
+    public int InitialDelayMinutes { get; set; } = 2;
+    public int MaxDelayMinutes { get; set; } = 60;
 }

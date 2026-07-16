@@ -69,6 +69,9 @@ public sealed class AdminNotificationsController : ControllerBase
                 item.Text,
                 item.ScheduledAt,
                 item.SentAt,
+                item.DeliveryAttemptCount,
+                item.LastAttemptAt,
+                item.NextAttemptAt,
                 item.ProviderMessageId,
                 item.ProviderDeliveryStatus,
                 item.ProviderStatusUpdatedAt,
@@ -95,7 +98,20 @@ public sealed class AdminNotificationsController : ControllerBase
         }
 
         var summary = await _delivery.ProcessPendingAsync(batchSize, cancellationToken);
-        var response = new ProcessPendingNotificationsResponse(summary.Processed, summary.Sent, summary.Failed);
+        var response = new ProcessPendingNotificationsResponse(summary.Processed, summary.Sent, summary.Failed, summary.Retried);
+        return Ok(ApiResponse<ProcessPendingNotificationsResponse>.Ok(response));
+    }
+
+    [HttpPost("{id:long}/retry")]
+    public async Task<IActionResult> Retry(long id, CancellationToken cancellationToken)
+    {
+        var summary = await _delivery.RetryMessageAsync(id, cancellationToken);
+        if (summary is null)
+        {
+            return NotFound(ApiResponse<object>.Fail("Notification not found."));
+        }
+
+        var response = new ProcessPendingNotificationsResponse(summary.Processed, summary.Sent, summary.Failed, summary.Retried);
         return Ok(ApiResponse<ProcessPendingNotificationsResponse>.Ok(response));
     }
 

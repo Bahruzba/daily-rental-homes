@@ -58,7 +58,7 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             _logger.LogWarning(exception, "Meta WhatsApp delivery failed for outbound message {OutboundMessageId}.", message.Id);
-            return NotificationDeliveryResult.Failed($"Meta WhatsApp request failed: {exception.Message}");
+            return NotificationDeliveryResult.RetryableFailed($"Meta WhatsApp request failed: {exception.Message}");
         }
 
         if (!response.IsSuccessStatusCode)
@@ -69,7 +69,10 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
                 message.Id,
                 (int)response.StatusCode,
                 error.Code);
-            return NotificationDeliveryResult.Failed(BuildFailureMessage(response.StatusCode, error));
+            var failureMessage = BuildFailureMessage(response.StatusCode, error);
+            return IsRetryableStatusCode(response.StatusCode)
+                ? NotificationDeliveryResult.RetryableFailed(failureMessage)
+                : NotificationDeliveryResult.Failed(failureMessage);
         }
 
         var providerMessageId = TryReadMessageId(responseText);
@@ -341,6 +344,9 @@ public sealed class MetaWhatsAppNotificationDeliveryProvider : INotificationDeli
         if (!string.IsNullOrWhiteSpace(error.Message)) parts.Add($"Message: {error.Message}");
         return string.Join(' ', parts);
     }
+
+    private static bool IsRetryableStatusCode(HttpStatusCode statusCode) =>
+        statusCode == (HttpStatusCode)429 || (int)statusCode >= 500;
 
     private static string? GetString(JsonElement element, string propertyName) =>
         element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
