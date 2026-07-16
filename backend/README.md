@@ -60,6 +60,8 @@ Important environment variables:
 - `NotificationDelivery__MetaWhatsApp__ApiVersion` — Meta Graph API version such as `v22.0`, required only when `Provider=MetaWhatsApp`.
 - `NotificationDelivery__MetaWhatsApp__WebhookVerifyToken` — Meta webhook verification token used by `GET /api/webhooks/meta-whatsapp`; never commit real tokens.
 - `NotificationDelivery__MetaWhatsApp__AppSecret` — Meta App Secret used to validate `X-Hub-Signature-256` on webhook POST requests; required when `Provider=MetaWhatsApp`; never commit real secrets.
+- `BackgroundWorkers__DistributedLocking__Enabled` — enables database-backed worker leases; defaults to `true`.
+- `BackgroundWorkers__DistributedLocking__LeaseSeconds` — lock lease duration for recurring background worker cycles; defaults to `120`.
 - `FileStorage__Provider` — uploaded-file storage provider. Only `Local` is implemented in this PR.
 - `FileStorage__Local__RootPath` — local storage root. Relative values are resolved under the API web root; default is `uploads`.
 - `FileStorage__Local__PublicBasePath` — public URL base for local files; default is `/uploads`.
@@ -83,6 +85,30 @@ Uploaded rental-home media and deposit receipt files go through the shared `IFil
 For the default local configuration, files are saved below `src/DailyRentalHomes.Api/wwwroot/uploads` in development and exposed with `/uploads/...` URLs, preserving existing API response behavior. Storage keys are normalized relative paths; traversal-style keys such as `../file` or absolute paths are rejected so upload code cannot escape the configured root. Delete operations are idempotent for already-missing local files.
 
 The database still stores the existing `media_files.file_url` value for backward compatibility. New local uploads store URLs such as `/uploads/rental-homes/{homeId}/{file}` and `/uploads/deposit-receipts/{file}`. Existing records using these URLs continue to work. No object-storage provider is implemented yet; Local storage is not suitable for horizontally scaled production deployments unless the upload directory is on shared persistent storage. A future S3/Azure/MinIO provider can be added behind `IFileStorage` without changing property or deposit business logic.
+
+## Background worker distributed locking
+
+Recurring background workers use a lightweight database-backed lease table (`distributed_locks`) so multiple API instances do not run the same side-effecting processing cycle at the same time.
+
+Current locked workers:
+
+- `NotificationDeliveryWorker` uses lock key `notification-delivery-worker`.
+- `DepositDeadlineReminderWorker` uses lock key `deposit-deadline-reminder-worker`.
+
+Configuration:
+
+```json
+"BackgroundWorkers": {
+  "DistributedLocking": {
+    "Enabled": true,
+    "LeaseSeconds": 120
+  }
+}
+```
+
+When a worker interval fires, it tries to acquire its named lock. If another instance owns an unexpired lease, that cycle is skipped and the worker waits for the next interval. If the owning process crashes, the lease expires and another instance can acquire the lock later. The lock is released when the processing pass finishes normally. Lock acquisition failures are logged by the worker and do not crash the hosted service.
+
+Distributed locking is additional protection only. Existing idempotency and duplicate-protection rules remain in place, including notification retry/backoff state and deposit reminder duplicate checks. The lease should be longer than a normal processing pass; if future jobs can run longer than the configured lease, add lease renewal before increasing workload size.
 
 ## Docker
 
@@ -342,7 +368,7 @@ The processor queues customer `deposit_deadline_reminder` outbox records for dep
 
 Duplicate protection reuses the existing `outbound_messages` table: a reminder is considered already queued when the same deposit already has a `deposit_deadline_reminder` message containing the current effective deadline. Running the manual processor repeatedly does not queue duplicates for the same deadline. If a broker later extends the deposit deadline, the new deadline is treated as a new reminder cycle and can queue a new reminder when it enters the configured window.
 
-Reminder processing is notification-only. It does not change booking status, deposit status, deposit amount, deadline extension metadata, refunds, or availability. `DepositDeadlineReminderWorker` automatically runs the same processing service in the background every `ProcessingIntervalMinutes` minutes. Very small or invalid intervals are clamped to a safe minimum of one minute so configuration mistakes do not create a tight database loop. The Admin manual endpoint remains available as an operational fallback for local/support use. Reminders are queued through the existing notification outbox; this worker does not send WhatsApp/SMS/email directly.
+Reminder processing is notification-only. It does not change booking status, deposit status, deposit amount, deadline extension metadata, refunds, or availability. `DepositDeadlineReminderWorker` automatically runs the same processing service in the background every `ProcessingIntervalMinutes` minutes. Each background cycle first acquires the `deposit-deadline-reminder-worker` distributed lock; if another API instance owns the active lease, the cycle is skipped. Very small or invalid intervals are clamped to a safe minimum of one minute so configuration mistakes do not create a tight database loop. The Admin manual endpoint remains available as an operational fallback for local/support use. Reminders are queued through the existing notification outbox; this worker does not send WhatsApp/SMS/email directly.
 
 Expired deposit deadline state is derived at read time. A deposit is considered expired when it has a `deadlineAt` in the past, is not approved, and the related booking is not `cancelled`, `completed`, or `rejected`. This state is exposed as `isDeadlineExpired` in deposit responses used by Broker and Customer booking detail/list flows. Broker booking list supports `hasExpiredDepositDeadline=true` to filter owned bookings with currently expired deposit deadlines. Admin users can inspect current expired deposit deadlines with:
 
@@ -488,7 +514,7 @@ The background worker is registered but disabled by default:
 }
 ```
 
-When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past and `next_attempt_at` is empty or due, processes a limited batch, and sends each eligible outbox row through `INotificationDeliveryProvider`. Eligibility and retry/failure decisions stay in the outbox processing layer; the provider only attempts delivery and returns success/failure details. Provider exceptions are caught, logged with the outbox message id, and converted into the retryable failed-attempt path so one provider failure does not crash the processing pass. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
+When enabled, `NotificationDeliveryWorker` polls due `pending` messages where `scheduled_at` is empty or in the past and `next_attempt_at` is empty or due, processes a limited batch, and sends each eligible outbox row through `INotificationDeliveryProvider`. Before each processing pass it acquires the `notification-delivery-worker` distributed lock; if another API instance owns the active lease, the cycle is skipped. Eligibility and retry/failure decisions stay in the outbox processing layer; the provider only attempts delivery and returns success/failure details. Provider exceptions are caught, logged with the outbox message id, and converted into the retryable failed-attempt path so one provider failure does not crash the processing pass. For local/dev testing while the worker is disabled, Admin users can manually process pending messages:
 
 - POST /api/admin/notifications/process-pending
 
