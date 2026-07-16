@@ -61,7 +61,11 @@ Important environment variables:
 - `NotificationDelivery__MetaWhatsApp__WebhookVerifyToken` — Meta webhook verification token used by `GET /api/webhooks/meta-whatsapp`; never commit real tokens.
 - `NotificationDelivery__MetaWhatsApp__AppSecret` — Meta App Secret used to validate `X-Hub-Signature-256` on webhook POST requests; required when `Provider=MetaWhatsApp`; never commit real secrets.
 
+Notification retry/backoff can also be configured with `NotificationDelivery__Retry__MaxAttempts`, `NotificationDelivery__Retry__InitialDelayMinutes`, and `NotificationDelivery__Retry__MaxDelayMinutes`.
+
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
+
+For the complete production-readiness checklist, see `../docs/production-readiness-checklist.md`.
 
 ## Docker
 
@@ -87,8 +91,12 @@ docker run --rm -p 5099:8080 \
 Start the API with a local SQL Server container:
 
 ```bash
+export MSSQL_SA_PASSWORD='CHANGE_ME_TO_A_STRONG_SQLSERVER_PASSWORD'
+export TOKEN_KEY='CHANGE_ME_TO_A_SECURE_32_BYTE_MINIMUM_SECRET'
 docker compose up --build
 ```
+
+The compose file requires `MSSQL_SA_PASSWORD` and `TOKEN_KEY`; it does not provide secret defaults.
 
 The compose file exposes:
 

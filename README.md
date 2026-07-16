@@ -90,3 +90,7 @@ Public search MVP: the homepage can filter published rental homes by keyword, ci
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.
+
+## Production Readiness
+
+See [docs/production-readiness-checklist.md](docs/production-readiness-checklist.md) for the current MVP deployment checklist, required environment variables, migration step, health endpoints, Docker usage, notification provider configuration, retry/backoff configuration, and known remaining limitations.

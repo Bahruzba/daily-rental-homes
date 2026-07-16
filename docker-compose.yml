@@ -8,10 +8,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: Server=sqlserver,1433;Database=DailyRentalHomes;User Id=sa;Password=Your_strong_password123;TrustServerCertificate=True
+      ConnectionStrings__DefaultConnection: Server=sqlserver,1433;Database=DailyRentalHomes;User Id=sa;Password=${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD};TrustServerCertificate=True
       Token__Issuer: DailyRentalHomes
       Token__Audience: DailyRentalHomesClients
-      Token__Key: LOCAL_DEVELOPMENT_KEY_CHANGE_LATER_123456789
+      Token__Key: ${TOKEN_KEY:?Set TOKEN_KEY}
       Token__Minutes: 1440
       Notifications__WorkerEnabled: "false"
     depends_on:
@@ -22,7 +22,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: Your_strong_password123
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD}
     ports:
       - "1433:1433"
     volumes:

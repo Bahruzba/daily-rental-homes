@@ -10,7 +10,8 @@ public static class NotificationDeliveryServiceCollectionExtensions
         services.AddOptions<NotificationDeliveryOptions>()
             .Bind(section)
             .Validate(IsSupportedProvider, "Notification delivery provider must be either Fake or MetaWhatsApp.")
-            .Validate(HasValidMetaWhatsAppConfiguration, "MetaWhatsApp notification delivery requires PhoneNumberId, AccessToken, ApiVersion, and AppSecret.")
+            .Validate(HasValidMetaWhatsAppConfiguration, "MetaWhatsApp notification delivery requires PhoneNumberId, AccessToken, ApiVersion, WebhookVerifyToken, and AppSecret.")
+            .Validate(HasValidRetryConfiguration, "Notification retry configuration requires MaxAttempts >= 1, InitialDelayMinutes >= 1, and MaxDelayMinutes >= InitialDelayMinutes.")
             .ValidateOnStart();
 
         var options = section.Get<NotificationDeliveryOptions>() ?? new NotificationDeliveryOptions();
@@ -43,9 +44,15 @@ public static class NotificationDeliveryServiceCollectionExtensions
         return !string.IsNullOrWhiteSpace(options.MetaWhatsApp.PhoneNumberId) &&
                !string.IsNullOrWhiteSpace(options.MetaWhatsApp.AccessToken) &&
                !string.IsNullOrWhiteSpace(options.MetaWhatsApp.ApiVersion) &&
+               !string.IsNullOrWhiteSpace(options.MetaWhatsApp.WebhookVerifyToken) &&
                !string.IsNullOrWhiteSpace(options.MetaWhatsApp.AppSecret) &&
                options.MetaWhatsApp.ApiVersion.Trim().StartsWith('v');
     }
+
+    private static bool HasValidRetryConfiguration(NotificationDeliveryOptions options) =>
+        options.Retry.MaxAttempts >= 1 &&
+        options.Retry.InitialDelayMinutes >= 1 &&
+        options.Retry.MaxDelayMinutes >= options.Retry.InitialDelayMinutes;
 
     private static bool IsFake(string? provider) =>
         string.Equals(provider, NotificationDeliveryOptions.FakeProvider, StringComparison.OrdinalIgnoreCase);
