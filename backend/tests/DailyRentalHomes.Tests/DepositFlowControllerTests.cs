@@ -615,7 +615,7 @@ public sealed class DepositFlowControllerTests
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Broker) } }
     };
 
-    private static AccountController AccountController(AppDbContext context, IWebHostEnvironment environment, long userId) => new(context, environment, new NotificationOutboxService(context))
+    private static AccountController AccountController(AppDbContext context, IWebHostEnvironment environment, long userId) => new(context, TestFileStorageFactory.Create(environment), new NotificationOutboxService(context))
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Customer) } }
     };

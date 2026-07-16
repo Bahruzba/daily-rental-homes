@@ -60,8 +60,29 @@ Important environment variables:
 - `NotificationDelivery__MetaWhatsApp__ApiVersion` — Meta Graph API version such as `v22.0`, required only when `Provider=MetaWhatsApp`.
 - `NotificationDelivery__MetaWhatsApp__WebhookVerifyToken` — Meta webhook verification token used by `GET /api/webhooks/meta-whatsapp`; never commit real tokens.
 - `NotificationDelivery__MetaWhatsApp__AppSecret` — Meta App Secret used to validate `X-Hub-Signature-256` on webhook POST requests; required when `Provider=MetaWhatsApp`; never commit real secrets.
+- `FileStorage__Provider` — uploaded-file storage provider. Only `Local` is implemented in this PR.
+- `FileStorage__Local__RootPath` — local storage root. Relative values are resolved under the API web root; default is `uploads`.
+- `FileStorage__Local__PublicBasePath` — public URL base for local files; default is `/uploads`.
 
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
+
+## File storage
+
+Uploaded rental-home media and deposit receipt files go through the shared `IFileStorage` abstraction. The default implementation is `LocalFileStorage`, configured by:
+
+```json
+"FileStorage": {
+  "Provider": "Local",
+  "Local": {
+    "RootPath": "uploads",
+    "PublicBasePath": "/uploads"
+  }
+}
+```
+
+For the default local configuration, files are saved below `src/DailyRentalHomes.Api/wwwroot/uploads` in development and exposed with `/uploads/...` URLs, preserving existing API response behavior. Storage keys are normalized relative paths; traversal-style keys such as `../file` or absolute paths are rejected so upload code cannot escape the configured root. Delete operations are idempotent for already-missing local files.
+
+The database still stores the existing `media_files.file_url` value for backward compatibility. New local uploads store URLs such as `/uploads/rental-homes/{homeId}/{file}` and `/uploads/deposit-receipts/{file}`. Existing records using these URLs continue to work. No object-storage provider is implemented yet; Local storage is not suitable for horizontally scaled production deployments unless the upload directory is on shared persistent storage. A future S3/Azure/MinIO provider can be added behind `IFileStorage` without changing property or deposit business logic.
 
 ## Docker
 
@@ -260,7 +281,7 @@ Create/update accepts title, description, city, district, address, daily price, 
 
 `POST /api/broker/rental-homes/{id}/duplicate` creates a draft copy of an existing rental home. Broker users can duplicate only their own homes; Admin can duplicate any home. The duplicate gets a new ID, new timestamps, `isPublished = false`, copied basic property fields, copied amenities, and new media rows that reference the same existing media URLs. It does not copy bookings, availability blocks, expenses, reports, cancellation requests, or any booking-related state. Coordinates and house rules are not copied because those fields are not part of the current rental-home model yet.
 
-Home images are stored in the existing `media_files` table with `file_type = HomeImage`. The first image for a home is assigned `sort_order = 0` and treated as the main image. Setting another image as main moves it to `sort_order = 0`. Upload accepts JPG, PNG, and WebP images up to 5 MB and stores development files under `src/DailyRentalHomes.Api/wwwroot/uploads/rental-homes/{homeId}`. Public URLs are returned as `/uploads/rental-homes/...`; local filesystem paths are not exposed.
+Home images are stored in the existing `media_files` table with `file_type = HomeImage`. The first image for a home is assigned `sort_order = 0` and treated as the main image. Setting another image as main moves it to `sort_order = 0`. Upload accepts JPG, PNG, and WebP images up to 5 MB and saves files through `IFileStorage`. With the default Local provider, development files are stored under the configured local root, usually `src/DailyRentalHomes.Api/wwwroot/uploads/rental-homes/{homeId}`. Public URLs are returned as `/uploads/rental-homes/...`; local filesystem paths are not exposed.
 
 Media type usage:
 
@@ -343,7 +364,7 @@ Customer-visible status meanings:
 - Deposit `approved` — deposit was accepted.
 - Deposit `rejected` — customer may re-upload only when `allowReupload` is true.
 
-Development receipts are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. This local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
+Development receipts are saved through `IFileStorage`; with the default Local provider they are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. Deposit receipt response exposure remains limited to the existing authorized customer/broker flows; this PR does not make receipt files more public. Local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
 
 ### Broker booking expenses
 

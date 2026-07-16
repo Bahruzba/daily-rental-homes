@@ -1,6 +1,7 @@
 using DailyRentalHomes.Api.Common;
 using DailyRentalHomes.Api.Contracts.Broker;
 using DailyRentalHomes.Api.Security;
+using DailyRentalHomes.Api.Storage;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
@@ -22,15 +23,15 @@ public sealed class BrokerRentalHomesController : ControllerBase
             ["image/jpeg"] = ".jpg",
             ["image/png"] = ".png",
             ["image/webp"] = ".webp"
-        };
+    };
 
     private readonly AppDbContext _db;
-    private readonly IWebHostEnvironment _environment;
+    private readonly IFileStorage _fileStorage;
 
-    public BrokerRentalHomesController(AppDbContext db, IWebHostEnvironment environment)
+    public BrokerRentalHomesController(AppDbContext db, IFileStorage fileStorage)
     {
         _db = db;
-        _environment = environment;
+        _fileStorage = fileStorage;
     }
 
     [HttpPost]
@@ -194,18 +195,10 @@ public sealed class BrokerRentalHomesController : ControllerBase
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (home is null) return NotFound(ApiResponse<object>.Fail("Rental home not found."));
 
-        var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
-            ? Path.Combine(_environment.ContentRootPath, "wwwroot")
-            : _environment.WebRootPath;
-        var uploadDirectory = Path.Combine(webRoot, "uploads", "rental-homes", id.ToString());
-        Directory.CreateDirectory(uploadDirectory);
-
         var storedName = $"{Guid.NewGuid():N}{extension}";
-        var fullPath = Path.Combine(uploadDirectory, storedName);
-        await using (var stream = System.IO.File.Create(fullPath))
-        {
-            await file.CopyToAsync(stream, cancellationToken);
-        }
+        var storageKey = $"rental-homes/{id}/{storedName}";
+        await using var input = file.OpenReadStream();
+        var storedFile = await _fileStorage.SaveAsync(storageKey, input, cancellationToken);
 
         var activeMedia = home.MediaFiles
             .Where(item => !item.IsDeleted && item.FileType == MediaFileType.HomeImage)
@@ -217,7 +210,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
             RentalHomeId = home.Id,
             FileType = MediaFileType.HomeImage,
             FileName = SafeFileName(file.FileName, extension),
-            FileUrl = $"/uploads/rental-homes/{id}/{storedName}",
+            FileUrl = storedFile.Url,
             ContentType = file.ContentType,
             SizeBytes = file.Length,
             SortOrder = isFirstImage ? 0 : activeMedia.Max(item => item.SortOrder) + 1,
@@ -231,7 +224,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
         }
         catch
         {
-            System.IO.File.Delete(fullPath);
+            await _fileStorage.DeleteAsync(storedFile.Key, CancellationToken.None);
             throw;
         }
 
@@ -247,6 +240,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
         var wasMain = media.SortOrder == 0;
         media.IsDeleted = true;
         media.UpdatedByUserId = User.GetUserId();
+        await _fileStorage.DeleteAsync(media.FileUrl, cancellationToken);
         if (wasMain)
         {
             var activeSiblings = await OwnMedia(id)
