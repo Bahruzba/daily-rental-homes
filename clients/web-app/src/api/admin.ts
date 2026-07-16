@@ -15,7 +15,14 @@ export type AdminNotification = {
   message: string
   scheduledAt?: string | null
   sentAt?: string | null
+  deliveryAttemptCount?: number
+  lastAttemptAt?: string | null
+  nextAttemptAt?: string | null
   providerMessageId?: string | null
+  providerDeliveryStatus?: string | null
+  providerStatusUpdatedAt?: string | null
+  deliveredAt?: string | null
+  readAt?: string | null
   errorMessage?: string | null
   relatedBookingId?: number | null
   relatedDepositId?: number | null
@@ -26,6 +33,7 @@ export type ProcessPendingNotificationsResult = {
   processed: number
   sent: number
   failed: number
+  retried?: number
 }
 
 export type AdminNotificationFilters = {
@@ -218,6 +226,36 @@ export async function processPendingNotifications(token: string, batchSize: numb
   return payload.data
 }
 
+export async function retryAdminNotification(token: string, id: number): Promise<ProcessPendingNotificationsResult> {
+  if (!useLiveApi) return retryMockNotification(id)
+
+  let response: Response
+  try {
+    response = await fetch(`${baseUrl}/api/admin/notifications/${id}/retry`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  } catch (technicalCause) {
+    throw new AdminRequestError('Serverlə əlaqə qurmaq mümkün olmadı.', technicalCause)
+  }
+
+  let payload: ApiResponse<ProcessPendingNotificationsResult>
+  try {
+    payload = await response.json() as ApiResponse<ProcessPendingNotificationsResult>
+  } catch (technicalCause) {
+    throw new AdminRequestError('Serverdən düzgün cavab alınmadı.', technicalCause)
+  }
+
+  if (!response.ok || !payload.success || !payload.data) {
+    const message = response.status === 401 || response.status === 403
+      ? 'Bildirişi yenidən emal etmək üçün admin icazəsi tələb olunur.'
+      : payload.error || 'Bildiriş yenidən emal edilmədi.'
+    throw new AdminRequestError(message, new Error(payload.error))
+  }
+
+  return payload.data
+}
+
 function applyMockNotificationFilters(filters: AdminNotificationFilters) {
   return mockNotifications.filter((item) => {
     if (filters.status?.trim() && item.status !== filters.status.trim()) return false
@@ -243,11 +281,55 @@ function processMockPendingNotifications(batchSize: number): ProcessPendingNotif
     const content = `${item.title} ${item.message} ${item.recipientName ?? ''} ${item.recipientPhone}`
     if (content.toUpperCase().includes('FAIL_FAKE_PROVIDER')) {
       failed += 1
-      return { ...item, status: 'failed', errorMessage: 'Fake provider failure marker was found.', providerMessageId: null }
+      return {
+        ...item,
+        status: 'failed',
+        errorMessage: 'Fake provider failure marker was found.',
+        providerMessageId: null,
+        lastAttemptAt: processedAt,
+        nextAttemptAt: null,
+        deliveryAttemptCount: (item.deliveryAttemptCount ?? 0) + 1,
+      }
     }
     sent += 1
-    return { ...item, status: 'sent', sentAt: processedAt, providerMessageId: `fake-${item.id}`, errorMessage: null }
+    return {
+      ...item,
+      status: 'sent',
+      sentAt: processedAt,
+      providerMessageId: `fake-${item.id}`,
+      providerDeliveryStatus: 'sent',
+      errorMessage: null,
+      lastAttemptAt: processedAt,
+      nextAttemptAt: null,
+      deliveryAttemptCount: (item.deliveryAttemptCount ?? 0) + 1,
+    }
   })
 
-  return { processed: due.length, sent, failed }
+  return { processed: due.length, sent, failed, retried: 0 }
+}
+
+function retryMockNotification(id: number): ProcessPendingNotificationsResult {
+  const item = mockNotifications.find((notification) => notification.id === id)
+  if (!item) throw new AdminRequestError('Bildiriş tapılmadı.')
+
+  const processedAt = new Date().toISOString()
+  const content = `${item.title} ${item.message} ${item.recipientName ?? ''} ${item.recipientPhone}`
+  const failed = content.toUpperCase().includes('FAIL_FAKE_PROVIDER')
+
+  mockNotifications = mockNotifications.map((notification) => {
+    if (notification.id !== id) return notification
+    return {
+      ...notification,
+      status: failed ? 'failed' : 'sent',
+      sentAt: failed ? null : processedAt,
+      providerMessageId: failed ? null : `fake-${notification.id}`,
+      providerDeliveryStatus: failed ? null : 'sent',
+      errorMessage: failed ? 'Fake provider failure marker was found.' : null,
+      lastAttemptAt: processedAt,
+      nextAttemptAt: null,
+      deliveryAttemptCount: (notification.deliveryAttemptCount ?? 0) + 1,
+    }
+  })
+
+  return { processed: 1, sent: failed ? 0 : 1, failed: failed ? 1 : 0, retried: 1 }
 }
