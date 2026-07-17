@@ -127,7 +127,7 @@ public sealed class AccountController : ControllerBase
         var storedName = $"{Guid.NewGuid():N}{extension}";
         var storageKey = $"deposit-receipts/{storedName}";
         await using var input = file.OpenReadStream();
-        var storedFile = await _fileStorage.SavePrivateAsync(storageKey, input, cancellationToken);
+        var storedFile = await _fileStorage.SavePrivateAsync(storageKey, input, file.ContentType, cancellationToken);
 
         foreach (var existing in deposit.ReceiptFiles.Where(item => item.FileType == MediaFileType.DepositReceipt && !item.IsDeleted))
         {

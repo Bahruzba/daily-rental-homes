@@ -60,9 +60,16 @@ Important environment variables:
 - `NotificationDelivery__MetaWhatsApp__ApiVersion` — Meta Graph API version such as `v22.0`, required only when `Provider=MetaWhatsApp`.
 - `NotificationDelivery__MetaWhatsApp__WebhookVerifyToken` — Meta webhook verification token used by `GET /api/webhooks/meta-whatsapp`; never commit real tokens.
 - `NotificationDelivery__MetaWhatsApp__AppSecret` — Meta App Secret used to validate `X-Hub-Signature-256` on webhook POST requests; required when `Provider=MetaWhatsApp`; never commit real secrets.
-- `FileStorage__Provider` — uploaded-file storage provider. Only `Local` is implemented in this PR.
+- `FileStorage__Provider` — uploaded-file storage provider. Supported values are `Local` and `S3`; default is `Local`.
 - `FileStorage__Local__RootPath` — local storage root. Relative values are resolved under the API web root; default is `uploads`.
+- `FileStorage__Local__PrivateRootPath` — local private storage root. Relative values are resolved under the API content root; default is `private-uploads`.
 - `FileStorage__Local__PublicBasePath` — public URL base for local files; default is `/uploads`.
+- `FileStorage__S3__BucketName` — S3 bucket name, required only when `FileStorage__Provider=S3`.
+- `FileStorage__S3__Region` — AWS region such as `eu-central-1`; optional when `ServiceUrl` is used by an S3-compatible provider.
+- `FileStorage__S3__ServiceUrl` — optional S3-compatible endpoint such as MinIO or another object-storage service.
+- `FileStorage__S3__AccessKey` / `FileStorage__S3__SecretKey` — optional explicit credentials; provide both together or use the normal AWS credential chain. Never commit real secrets.
+- `FileStorage__S3__PublicBaseUrl` — optional public/CDN base URL used to build public rental-home media URLs.
+- `FileStorage__S3__ForcePathStyle` — set `true` for providers that require path-style bucket URLs.
 
 This backend currently uses Entity Framework Core SQL Server provider. The development compose file therefore uses SQL Server. Switching to PostgreSQL would require a separate provider/migration compatibility task.
 
@@ -83,7 +90,40 @@ Uploaded rental-home media and deposit receipt files go through the shared `IFil
 
 For the default local configuration, public rental-home media is saved below `src/DailyRentalHomes.Api/wwwroot/uploads` in development and exposed with `/uploads/...` URLs, preserving existing public media behavior. Private deposit receipts are saved below `src/DailyRentalHomes.Api/private-uploads` and are not served by static-file middleware. Storage keys are normalized relative paths; traversal-style keys such as `../file` or absolute paths are rejected so upload code cannot escape the configured root. Delete operations are idempotent for already-missing local files.
 
-The database still stores the existing `media_files.file_url` value for backward compatibility. New local rental-home media uploads store URLs such as `/uploads/rental-homes/{homeId}/{file}`. New deposit receipt uploads store private storage keys such as `deposit-receipts/{file}` and API responses expose the authorized download endpoint instead of the raw stored location. Legacy receipt records that still contain `/uploads/deposit-receipts/...` can be read through the controlled endpoint, while direct static-file requests to `/uploads/deposit-receipts/...` are blocked. No object-storage provider is implemented in `main` yet; Local storage is not suitable for horizontally scaled production deployments unless storage roots are on shared persistent storage. A future S3/Azure/MinIO provider can be added behind `IFileStorage` without changing property or deposit business logic.
+S3-compatible object storage can be selected with:
+
+```json
+"FileStorage": {
+  "Provider": "S3",
+  "S3": {
+    "BucketName": "daily-rental-homes",
+    "Region": "eu-central-1",
+    "ServiceUrl": "",
+    "AccessKey": "",
+    "SecretKey": "",
+    "PublicBaseUrl": "https://cdn.example.com",
+    "ForcePathStyle": false
+  }
+}
+```
+
+Equivalent environment-variable configuration:
+
+```bash
+FileStorage__Provider=S3
+FileStorage__S3__BucketName=daily-rental-homes
+FileStorage__S3__Region=eu-central-1
+FileStorage__S3__PublicBaseUrl=https://cdn.example.com
+FileStorage__S3__ForcePathStyle=false
+```
+
+For MinIO or other compatible providers, set `FileStorage__S3__ServiceUrl` and usually `FileStorage__S3__ForcePathStyle=true`. When explicit `AccessKey` and `SecretKey` are omitted, the AWS SDK uses its normal environment/profile/instance credential chain. The application does not create buckets or bucket policies; operators must provision the bucket, credentials, public-read/CDN behavior for public media, and any server-side encryption requirements separately.
+
+Public rental-home media still stores stable URL values in `media_files.file_url`. With S3, public upload responses use `PublicBaseUrl` plus the normalized object key when configured, so a later CDN can be introduced without changing business logic. If `PublicBaseUrl` is omitted, the provider builds a direct S3-style URL from the configured bucket/region or service URL.
+
+Private deposit receipts remain private with S3. `SavePrivateAsync` stores only the object key as the database URL value, and customer/broker/admin access continues through the authorized `GET /api/bookings/{bookingId}/deposit/receipt` endpoint, which streams the object through `IFileStorage.OpenReadAsync`. Do not make the receipt prefix public in the bucket. Legacy receipt records that still contain `/uploads/deposit-receipts/...` can be read through the controlled endpoint with the Local provider, while direct static-file requests to `/uploads/deposit-receipts/...` are blocked.
+
+The default smoke/local path remains `FileStorage:Provider=Local`, so local smoke checks and CI do not require AWS credentials or network access. Automated tests mock the S3 client and do not call real AWS or S3-compatible services. For production verification, operators should run the API with S3 configuration in a staging environment and manually verify public media upload/delete plus authorized private receipt download.
 
 ## Docker
 

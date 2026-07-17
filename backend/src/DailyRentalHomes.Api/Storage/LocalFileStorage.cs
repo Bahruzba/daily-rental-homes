@@ -12,9 +12,9 @@ public sealed class LocalFileStorage : IFileStorage
     public LocalFileStorage(IOptions<FileStorageOptions> options, IWebHostEnvironment environment)
     {
         var storageOptions = options.Value;
-        if (!string.Equals(storageOptions.Provider, "Local", StringComparison.OrdinalIgnoreCase))
+        if (!FileStorageProviderNames.IsLocal(storageOptions.Provider))
         {
-            throw new InvalidOperationException("Only Local file storage provider is supported.");
+            throw new InvalidOperationException("Local file storage can only be used when FileStorage:Provider is Local.");
         }
 
         var rootPath = storageOptions.Local.RootPath?.Trim();
@@ -40,7 +40,7 @@ public sealed class LocalFileStorage : IFileStorage
         Directory.CreateDirectory(_privateRootPath);
     }
 
-    public async Task<StoredFile> SaveAsync(string key, Stream content, CancellationToken cancellationToken)
+    public async Task<StoredFile> SaveAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken)
     {
         var normalizedKey = NormalizeKey(key);
         var fullPath = GetFullPath(normalizedKey);
@@ -52,7 +52,7 @@ public sealed class LocalFileStorage : IFileStorage
         return new StoredFile(normalizedKey, GetPublicUrl(normalizedKey));
     }
 
-    public async Task<StoredFile> SavePrivateAsync(string key, Stream content, CancellationToken cancellationToken)
+    public async Task<StoredFile> SavePrivateAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken)
     {
         var normalizedKey = NormalizeKey(key);
         var fullPath = GetPrivateFullPath(normalizedKey);
@@ -159,25 +159,7 @@ public sealed class LocalFileStorage : IFileStorage
 
     private static string NormalizeKey(string key)
     {
-        var rawValue = key.Trim();
-        if (rawValue.StartsWith('/') || rawValue.StartsWith('\\'))
-        {
-            throw new InvalidOperationException("File storage key must be relative.");
-        }
-
-        var value = rawValue.Replace('\\', '/').Trim('/');
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new InvalidOperationException("File storage key is required.");
-        }
-
-        var segments = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Any(segment => segment is "." or ".." || segment.Contains(':')))
-        {
-            throw new InvalidOperationException("File storage key contains unsafe path segments.");
-        }
-
-        return string.Join('/', segments);
+        return StorageKey.Normalize(key);
     }
 
     private static string NormalizePublicBasePath(string? value)
