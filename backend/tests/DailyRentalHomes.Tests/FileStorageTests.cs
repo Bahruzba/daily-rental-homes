@@ -14,7 +14,7 @@ public sealed class FileStorageTests
         var environment = TestEnvironment.Create();
         var storage = CreateStorage(environment);
 
-        var stored = await storage.SaveAsync("rental-homes/101/home.webp", new MemoryStream([1, 2, 3]), default);
+        var stored = await storage.SaveAsync("rental-homes/101/home.webp", new MemoryStream([1, 2, 3]), "image/webp", default);
 
         Assert.Equal("rental-homes/101/home.webp", stored.Key);
         Assert.Equal("/uploads/rental-homes/101/home.webp", stored.Url);
@@ -27,7 +27,7 @@ public sealed class FileStorageTests
         var environment = TestEnvironment.Create();
         var storage = CreateStorage(environment);
 
-        var stored = await storage.SavePrivateAsync("deposit-receipts/receipt.png", new MemoryStream([1, 2, 3]), default);
+        var stored = await storage.SavePrivateAsync("deposit-receipts/receipt.png", new MemoryStream([1, 2, 3]), "image/png", default);
 
         Assert.Equal("deposit-receipts/receipt.png", stored.Key);
         Assert.Equal("deposit-receipts/receipt.png", stored.Url);
@@ -41,8 +41,8 @@ public sealed class FileStorageTests
     {
         var environment = TestEnvironment.Create();
         var storage = CreateStorage(environment);
-        await storage.SavePrivateAsync("deposit-receipts/private.png", new MemoryStream([1]), default);
-        await storage.SaveAsync("deposit-receipts/legacy.png", new MemoryStream([2]), default);
+        await storage.SavePrivateAsync("deposit-receipts/private.png", new MemoryStream([1]), "image/png", default);
+        await storage.SaveAsync("deposit-receipts/legacy.png", new MemoryStream([2]), "image/png", default);
 
         var privateFile = await storage.OpenReadAsync("deposit-receipts/private.png", default);
         var legacyFile = await storage.OpenReadAsync("/uploads/deposit-receipts/legacy.png", default);
@@ -63,7 +63,7 @@ public sealed class FileStorageTests
         var storage = CreateStorage(TestEnvironment.Create());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            storage.SaveAsync(key, new MemoryStream([1]), default));
+            storage.SaveAsync(key, new MemoryStream([1]), "image/webp", default));
     }
 
     [Fact]

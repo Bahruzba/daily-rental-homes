@@ -198,7 +198,7 @@ public sealed class BrokerRentalHomesController : ControllerBase
         var storedName = $"{Guid.NewGuid():N}{extension}";
         var storageKey = $"rental-homes/{id}/{storedName}";
         await using var input = file.OpenReadStream();
-        var storedFile = await _fileStorage.SaveAsync(storageKey, input, cancellationToken);
+        var storedFile = await _fileStorage.SaveAsync(storageKey, input, file.ContentType, cancellationToken);
 
         var activeMedia = home.MediaFiles
             .Where(item => !item.IsDeleted && item.FileType == MediaFileType.HomeImage)

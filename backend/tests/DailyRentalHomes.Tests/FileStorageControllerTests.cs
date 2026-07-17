@@ -297,18 +297,21 @@ public sealed class FileStorageControllerTests
         public List<string> PrivateSavedUrls { get; } = [];
         public List<string> DeletedKeysOrUrls { get; } = [];
         public List<string> OpenedKeysOrUrls { get; } = [];
+        public List<string?> ContentTypes { get; } = [];
 
-        public Task<StoredFile> SaveAsync(string key, Stream content, CancellationToken cancellationToken)
+        public Task<StoredFile> SaveAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken)
         {
             SavedKeys.Add(key);
+            ContentTypes.Add(contentType);
             var url = GetPublicUrl(key);
             SavedUrls.Add(url);
             return Task.FromResult(new StoredFile(key, url));
         }
 
-        public Task<StoredFile> SavePrivateAsync(string key, Stream content, CancellationToken cancellationToken)
+        public Task<StoredFile> SavePrivateAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken)
         {
             PrivateSavedKeys.Add(key);
+            ContentTypes.Add(contentType);
             PrivateSavedUrls.Add(key);
             return Task.FromResult(new StoredFile(key, key));
         }

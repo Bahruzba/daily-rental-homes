@@ -2,8 +2,8 @@ namespace DailyRentalHomes.Api.Storage;
 
 public interface IFileStorage
 {
-    Task<StoredFile> SaveAsync(string key, Stream content, CancellationToken cancellationToken);
-    Task<StoredFile> SavePrivateAsync(string key, Stream content, CancellationToken cancellationToken);
+    Task<StoredFile> SaveAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken);
+    Task<StoredFile> SavePrivateAsync(string key, Stream content, string? contentType, CancellationToken cancellationToken);
     Task<StoredFileReadResult?> OpenReadAsync(string keyOrUrl, CancellationToken cancellationToken);
     Task DeleteAsync(string keyOrUrl, CancellationToken cancellationToken);
     string GetPublicUrl(string key);

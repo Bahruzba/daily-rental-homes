@@ -105,12 +105,7 @@ builder.Services.AddOptions<NotificationWorkerOptions>()
     .Bind(builder.Configuration.GetSection(NotificationWorkerOptions.SectionName));
 builder.Services.AddOptions<DepositReminderOptions>()
     .Bind(builder.Configuration.GetSection(DepositReminderOptions.SectionName));
-builder.Services.AddOptions<FileStorageOptions>()
-    .Bind(builder.Configuration.GetSection(FileStorageOptions.SectionName))
-    .Validate(options => string.Equals(options.Provider, "Local", StringComparison.OrdinalIgnoreCase), "Only Local file storage provider is supported.")
-    .Validate(options => !string.IsNullOrWhiteSpace(options.Local.RootPath), "FileStorage:Local:RootPath is required.")
-    .ValidateOnStart();
-builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddFileStorage(builder.Configuration);
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
 builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDeadlineReminderProcessingService>();
 builder.Services.AddNotificationDelivery(builder.Configuration);
