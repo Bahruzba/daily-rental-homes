@@ -60,6 +60,7 @@ export function AccountBookingDetailPage() {
   const [cancelRequesting, setCancelRequesting] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelRequestSent, setCancelRequestSent] = useState(false)
+  const [receiptOpening, setReceiptOpening] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -139,6 +140,31 @@ export function AccountBookingDetailPage() {
     } catch (cause) {
       console.error('Booking link copy failed', cause)
       setError('Linki kopyalamaq mümkün olmadı. Brauzer icazələrini yoxlayın.')
+    }
+  }
+
+  const openReceipt = async (url: string) => {
+    if (!session) return
+    setError('')
+    setReceiptOpening(true)
+    try {
+      const resolvedUrl = resolveApiAssetUrl(url)
+      if (!url.startsWith('/api/')) {
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+
+      const response = await fetch(resolvedUrl, { headers: { Authorization: `Bearer ${session.accessToken}` } })
+      if (!response.ok) throw new Error('Receipt download failed')
+      const blob = await response.blob()
+      const objectUrl = window.URL.createObjectURL(blob)
+      window.open(objectUrl, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (cause) {
+      console.error('Receipt open failed', cause)
+      setError('Qəbzi açmaq mümkün olmadı.')
+    } finally {
+      setReceiptOpening(false)
     }
   }
 
@@ -251,9 +277,9 @@ export function AccountBookingDetailPage() {
                       {booking.deposit.note && <p className="deposit-instruction">{booking.deposit.note}</p>}
                       {booking.deposit.reviewNote && <p className="deposit-review-note">Broker qeydi: {booking.deposit.reviewNote}</p>}
                       {booking.deposit.receipt && (
-                        <a className="receipt-link" href={resolveApiAssetUrl(booking.deposit.receipt.fileUrl)} target="_blank" rel="noreferrer">
-                          Yüklənmiş qəbzi aç
-                        </a>
+                        <button className="receipt-link" type="button" disabled={receiptOpening} onClick={() => void openReceipt(booking.deposit!.receipt!.fileUrl)}>
+                          {receiptOpening ? 'Qəbz açılır…' : 'Yüklənmiş qəbzi aç'}
+                        </button>
                       )}
                       {(booking.deposit.statusCode === 'requested' || (booking.deposit.statusCode === 'rejected' && booking.deposit.allowReupload)) && (
                         <label className="receipt-upload button button-primary">

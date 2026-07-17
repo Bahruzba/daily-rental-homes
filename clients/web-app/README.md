@@ -80,7 +80,7 @@ Customer-visible status davranışı:
 - Deposit approved: beh qəbul edilib.
 - Deposit rejected: `allowReupload` true olduqda yeni qəbz yükləmək mümkündür.
 
-Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunur. Live rejimdə frontend `/api/account/bookings`, `/api/account/bookings/{id}` və `/api/account/bookings/{id}/deposit/receipt` endpoint-lərini çağırır.
+Mock rejimdə account və qəbz upload flow-u lokal state ilə simulyasiya olunur. Live rejimdə frontend `/api/account/bookings`, `/api/account/bookings/{id}` və `POST /api/account/bookings/{id}/deposit/receipt` endpoint-lərini çağırır. Yüklənmiş qəbzi açmaq üçün frontend birbaşa public URL açmır; `GET /api/bookings/{id}/deposit/receipt` endpoint-inə Bearer token ilə sorğu göndərir və gələn private faylı browser blob kimi açır.
 
 Customer `/account` rezervasiya siyahısında status filteri var. Seçilmiş status localStorage-da `daily-homes-customer-booking-filters` açarı ilə saxlanılır və müştəri səhifəyə qayıdanda bərpa olunur. `Filtrləri sıfırla` düyməsi UI filterini təmizləyir, saxlanmış dəyəri silir və tam rezervasiya siyahısını yenidən yükləyir. Mock və live rejimlərdə filter frontend-də yüklənmiş siyahı üzərində tətbiq olunur.
 
@@ -150,7 +150,7 @@ Broker `/broker/bookings/:id` səhifəsində məbləğ, gələcək son tarix, ma
 
 Broker booking detail səhifəsində mövcud beh üçün son tarix, uzadılma vaxtı və uzadılma səbəbi göstərilir. Backend `isDeadlineExpired` qaytardıqda broker detail-də `Beh üçün ayrılmış vaxt bitib.`, customer detail-də isə `Beh üçün ayrılmış vaxt bitib. Ətraflı məlumat üçün maklerlə əlaqə saxlayın.` xəbərdarlığı görünür. Uyğun statuslarda broker yeni gələcək son tarix və istəyə bağlı 500 simvolluq səbəblə `POST /api/broker/bookings/{bookingId}/deposit/extend-deadline` endpoint-ini çağıraraq müddəti uzada bilər. Customer booking detail səhifəsində də aktual son tarix və uzadılma səbəbi görünür, amma customer üçün uzatma action-u yoxdur. Mock rejimdə demo beh deadline extension və expired deadline məlumatı göstərilir; deadline uzatma lokal state/localStorage ilə simulyasiya olunur.
 
-Bu MVP real ödəniş etmir. Live receipt faylları backend-in lokal `wwwroot/uploads/deposit-receipts` qovluğunda saxlanılır. Production üçün private object storage və authorization-aware download tələb olunur. Frontend və backend yalnız maskalanmış kart dəyəri qəbul edir; tam PAN yazılmamalıdır.
+Bu MVP real ödəniş etmir. Live receipt faylları backend-də private storage altında saxlanılır və yalnız authorization-aware download endpoint-i ilə açılır. Frontend və backend yalnız maskalanmış kart dəyəri qəbul edir; tam PAN yazılmamalıdır.
 
 Beh əməliyyatlarından sonra frontend bildirişin növbəyə alındığını göstərir. Mock rejimdə bu mesaj lokal simulyasiya olunur; live rejimdə backend `outbound_messages` cədvəlinə qeyd yazır. Bu MVP-də tam notification UI və real WhatsApp/SMS provider yoxdur.
 

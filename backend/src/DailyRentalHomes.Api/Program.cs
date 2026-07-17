@@ -134,6 +134,16 @@ if (app.Environment.IsDevelopment())
     await DbSeed.RunAsync(db);
 }
 
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/uploads/deposit-receipts", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    await next();
+});
 app.UseStaticFiles();
 app.UseHttpsRedirection();
 if (app.Environment.IsDevelopment())

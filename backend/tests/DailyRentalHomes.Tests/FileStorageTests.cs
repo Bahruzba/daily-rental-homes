@@ -21,6 +21,38 @@ public sealed class FileStorageTests
         Assert.True(File.Exists(Path.Combine(environment.WebRootPath, "uploads", "rental-homes", "101", "home.webp")));
     }
 
+    [Fact]
+    public async Task LocalProviderSavesPrivateFilesOutsideWebRoot()
+    {
+        var environment = TestEnvironment.Create();
+        var storage = CreateStorage(environment);
+
+        var stored = await storage.SavePrivateAsync("deposit-receipts/receipt.png", new MemoryStream([1, 2, 3]), default);
+
+        Assert.Equal("deposit-receipts/receipt.png", stored.Key);
+        Assert.Equal("deposit-receipts/receipt.png", stored.Url);
+        Assert.False(stored.Url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase));
+        Assert.True(File.Exists(Path.Combine(environment.ContentRootPath, "private-uploads", "deposit-receipts", "receipt.png")));
+        Assert.False(File.Exists(Path.Combine(environment.WebRootPath, "uploads", "deposit-receipts", "receipt.png")));
+    }
+
+    [Fact]
+    public async Task LocalProviderReadsPrivateAndLegacyPublicReceiptLocations()
+    {
+        var environment = TestEnvironment.Create();
+        var storage = CreateStorage(environment);
+        await storage.SavePrivateAsync("deposit-receipts/private.png", new MemoryStream([1]), default);
+        await storage.SaveAsync("deposit-receipts/legacy.png", new MemoryStream([2]), default);
+
+        var privateFile = await storage.OpenReadAsync("deposit-receipts/private.png", default);
+        var legacyFile = await storage.OpenReadAsync("/uploads/deposit-receipts/legacy.png", default);
+
+        Assert.NotNull(privateFile);
+        Assert.NotNull(legacyFile);
+        await privateFile.Content.DisposeAsync();
+        await legacyFile.Content.DisposeAsync();
+    }
+
     [Theory]
     [InlineData("../outside.webp")]
     [InlineData("rental-homes/../../outside.webp")]
@@ -63,6 +95,7 @@ public sealed class FileStorageTests
                 Local = new LocalFileStorageOptions
                 {
                     RootPath = "uploads",
+                    PrivateRootPath = "private-uploads",
                     PublicBasePath = "/uploads"
                 }
             }),

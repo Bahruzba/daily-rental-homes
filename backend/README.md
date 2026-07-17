@@ -75,14 +75,15 @@ Uploaded rental-home media and deposit receipt files go through the shared `IFil
   "Provider": "Local",
   "Local": {
     "RootPath": "uploads",
+    "PrivateRootPath": "private-uploads",
     "PublicBasePath": "/uploads"
   }
 }
 ```
 
-For the default local configuration, files are saved below `src/DailyRentalHomes.Api/wwwroot/uploads` in development and exposed with `/uploads/...` URLs, preserving existing API response behavior. Storage keys are normalized relative paths; traversal-style keys such as `../file` or absolute paths are rejected so upload code cannot escape the configured root. Delete operations are idempotent for already-missing local files.
+For the default local configuration, public rental-home media is saved below `src/DailyRentalHomes.Api/wwwroot/uploads` in development and exposed with `/uploads/...` URLs, preserving existing public media behavior. Private deposit receipts are saved below `src/DailyRentalHomes.Api/private-uploads` and are not served by static-file middleware. Storage keys are normalized relative paths; traversal-style keys such as `../file` or absolute paths are rejected so upload code cannot escape the configured root. Delete operations are idempotent for already-missing local files.
 
-The database still stores the existing `media_files.file_url` value for backward compatibility. New local uploads store URLs such as `/uploads/rental-homes/{homeId}/{file}` and `/uploads/deposit-receipts/{file}`. Existing records using these URLs continue to work. No object-storage provider is implemented yet; Local storage is not suitable for horizontally scaled production deployments unless the upload directory is on shared persistent storage. A future S3/Azure/MinIO provider can be added behind `IFileStorage` without changing property or deposit business logic.
+The database still stores the existing `media_files.file_url` value for backward compatibility. New local rental-home media uploads store URLs such as `/uploads/rental-homes/{homeId}/{file}`. New deposit receipt uploads store private storage keys such as `deposit-receipts/{file}` and API responses expose the authorized download endpoint instead of the raw stored location. Legacy receipt records that still contain `/uploads/deposit-receipts/...` can be read through the controlled endpoint, while direct static-file requests to `/uploads/deposit-receipts/...` are blocked. No object-storage provider is implemented in `main` yet; Local storage is not suitable for horizontally scaled production deployments unless storage roots are on shared persistent storage. A future S3/Azure/MinIO provider can be added behind `IFileStorage` without changing property or deposit business logic.
 
 ## Docker
 
@@ -308,11 +309,14 @@ Customer endpoints (Customer JWT, matched by booking customer/user or verified p
 - GET /api/account/bookings
 - GET /api/account/bookings/{id}
 - POST /api/account/bookings/{id}/deposit/receipt (`multipart/form-data`, field: `file`)
+- GET /api/bookings/{id}/deposit/receipt
 - POST /api/account/bookings/{id}/cancellation-requests
 
 Requesting a deposit creates one deposit per booking, stores only a masked card value, and moves a Pending booking to `waiting_deposit`. Customer account booking list/detail responses include booking status, selected dates, total amount, rental home city/district/main image, and deposit instructions when available. Customer-visible deposit data includes amount, deadline, status, card holder, masked PAN, bank name, broker instruction note, uploaded receipt, review note, and `allowReupload`; broker-only private availability notes are not exposed.
 
 Receipt upload accepts JPG, PNG, or WebP images up to 5 MB and changes the deposit to `receipt_uploaded`. Customers can upload only for bookings matched to their account/user or verified phone. Upload is allowed only when the deposit is waiting for a receipt, or when it was rejected with `allowReupload = true`. Approval requires a receipt, sets the deposit to `approved`, and moves the booking to `confirmed`. Rejection keeps the booking in `waiting_deposit` and may allow a replacement upload. Legacy generic deposit/media write endpoints are Admin-only so Broker and Customer users cannot bypass this flow.
+
+Deposit receipt files are private. New Local receipt uploads are stored outside `wwwroot`, and deposit DTOs return `/api/bookings/{bookingId}/deposit/receipt` as the receipt link. The download endpoint requires authentication and authorizes the related customer, owning broker, or Admin before streaming the file. It returns `no-store/private` cache headers and a safe download file name. Unrelated users receive not-found behavior; anonymous users are blocked by authentication. Public rental-home media under `/uploads/rental-homes/...` remains unchanged.
 
 Broker/Admin users can extend a requested deposit deadline with `POST /api/broker/bookings/{bookingId}/deposit/extend-deadline`:
 
@@ -364,7 +368,7 @@ Customer-visible status meanings:
 - Deposit `approved` — deposit was accepted.
 - Deposit `rejected` — customer may re-upload only when `allowReupload` is true.
 
-Development receipts are saved through `IFileStorage`; with the default Local provider they are stored under `src/DailyRentalHomes.Api/wwwroot/uploads/deposit-receipts` and served from `/uploads/deposit-receipts/...`. Deposit receipt response exposure remains limited to the existing authorized customer/broker flows; this PR does not make receipt files more public. Local file storage is an MVP implementation; production requires private object storage, authorization-aware downloads, malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
+Development receipts are saved through `IFileStorage`; with the default Local provider, new receipt files are stored under `src/DailyRentalHomes.Api/private-uploads/deposit-receipts` and opened through the authorized API endpoint. Direct static access to `/uploads/deposit-receipts/...` is blocked for compatibility records. Production still requires malware/content validation, retention rules, and encryption. There is no payment gateway or real SMS/WhatsApp provider. Full card PAN must never be stored; the API requires a masked value containing `*`.
 
 ### Broker booking expenses
 

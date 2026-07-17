@@ -35,7 +35,12 @@ public sealed record DepositResponse(
         var receipt = deposit.ReceiptFiles
             .Where(file => file.FileType == MediaFileType.DepositReceipt && !file.IsDeleted)
             .OrderByDescending(file => file.Id)
-            .Select(file => new DepositReceiptResponse(file.Id, file.FileName, file.FileUrl, file.ContentType, file.SizeBytes))
+            .Select(file => new DepositReceiptResponse(
+                file.Id,
+                file.FileName,
+                $"/api/bookings/{deposit.BookingId}/deposit/receipt",
+                file.ContentType,
+                file.SizeBytes))
             .FirstOrDefault();
 
         return new DepositResponse(
