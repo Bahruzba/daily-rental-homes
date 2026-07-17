@@ -1,4 +1,4 @@
-name: Backend CI
+name: CI Quality Gates
 
 on:
   push:
@@ -7,10 +7,17 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  backend:
+    name: Backend
     runs-on: ubuntu-latest
 
     steps:
@@ -20,7 +27,15 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          global-json-file: backend/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/global.json', 'backend/dotnet-tools.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore
         working-directory: backend
@@ -28,4 +43,76 @@ jobs:
 
       - name: Build
         working-directory: backend
-        run: dotnet build DailyRentalHomes.slnx --configuration Release --no-restore
+        run: dotnet build DailyRentalHomes.slnx --no-restore --configuration Release
+
+      - name: Test
+        working-directory: backend
+        run: dotnet test DailyRentalHomes.slnx --no-build --no-restore --configuration Release
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+          cache: npm
+          cache-dependency-path: clients/web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: clients/web-app
+        run: npm ci
+
+      - name: Build
+        working-directory: clients/web-app
+        run: npm run build
+
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/global.json', 'backend/dotnet-tools.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore DailyRentalHomes.slnx
+
+      - name: Restore .NET tools
+        working-directory: backend
+        run: dotnet tool restore
+
+      - name: Generate idempotent migration script
+        working-directory: backend
+        run: >
+          dotnet tool run dotnet-ef migrations script
+          --idempotent
+          --configuration Release
+          --project src/DailyRentalHomes.Infrastructure
+          --startup-project src/DailyRentalHomes.Api
+          --output "${{ runner.temp }}/migrations-idempotent.sql"
+
+      - name: Validate migration script output
+        shell: bash
+        run: |
+          test -s "${RUNNER_TEMP}/migrations-idempotent.sql"
+          grep -q "__EFMigrationsHistory" "${RUNNER_TEMP}/migrations-idempotent.sql"
