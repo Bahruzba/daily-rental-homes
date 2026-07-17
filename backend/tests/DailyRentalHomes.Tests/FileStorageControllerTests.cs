@@ -165,6 +165,25 @@ public sealed class FileStorageControllerTests
     }
 
     [Fact]
+    public async Task AnonymousReceiptAccessReturnsUnauthorized()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = new DepositReceiptsController(context, new RecordingFileStorage())
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    [Fact]
     public async Task DeleteMediaRemovesStoredFileThroughAbstraction()
     {
         await using var context = CreateContext();

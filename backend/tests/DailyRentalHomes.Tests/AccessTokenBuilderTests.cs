@@ -1,8 +1,10 @@
 using DailyRentalHomes.Api.Options;
+using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
@@ -52,5 +54,34 @@ public sealed class AccessTokenBuilderTests
         Assert.Equal("+994501112233", principal.FindFirst("phone_number")?.Value);
         Assert.Equal(nameof(UserRole.Broker), principal.FindFirst("role")?.Value);
         Assert.True(token.ExpiresAt > DateTime.UtcNow.AddMinutes(14));
+    }
+
+    [Fact]
+    public void JwtSecretValidator_AllowsDevelopmentPlaceholderOnlyInDevelopment()
+    {
+        const string developmentKey = "LOCAL_DEVELOPMENT_KEY_CHANGE_LATER_123456789";
+
+        Assert.True(JwtSecretValidator.IsAllowed(developmentKey, Environments.Development));
+        Assert.False(JwtSecretValidator.IsAllowed(developmentKey, Environments.Production));
+    }
+
+    [Fact]
+    public void JwtSecretValidator_RejectsPlaceholderProductionSecretWithoutEchoingIt()
+    {
+        const string placeholder = "CHANGE_ME_TO_A_SECURE_32_BYTE_MINIMUM_SECRET";
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            JwtSecretValidator.ThrowIfUnsafe(placeholder, Environments.Production));
+
+        Assert.Contains("Token key", exception.Message);
+        Assert.DoesNotContain(placeholder, exception.Message);
+    }
+
+    [Fact]
+    public void JwtSecretValidator_AllowsUniqueProductionSecret()
+    {
+        const string uniqueSecret = "prod_secret_9f7c2c4f6a12422aa72f59b61e8d8c5b";
+
+        Assert.True(JwtSecretValidator.IsAllowed(uniqueSecret, Environments.Production));
     }
 }
