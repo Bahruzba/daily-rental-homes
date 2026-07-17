@@ -102,3 +102,7 @@ Jobs:
 - `Migrations` restores backend tools and generates an idempotent EF Core migration SQL script to a temporary runner path, then verifies the script is non-empty and includes EF migration history markers.
 
 CI intentionally uses the repository's test/default configuration and does not contact production services. It does not require Meta WhatsApp credentials, AWS/S3 credentials, production JWT secrets, production database credentials, Docker publishing, or deployment infrastructure. Recommended branch protection checks are `Backend`, `Frontend`, and `Migrations`.
+
+## Production security
+
+Before production deployment, review [docs/production-security-checklist.md](docs/production-security-checklist.md). It covers JWT/database/Meta/S3 secrets, private deposit receipts, upload limitations, CORS, least-privilege storage permissions, and remaining MVP risks.
