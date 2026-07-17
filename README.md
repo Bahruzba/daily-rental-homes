@@ -90,3 +90,15 @@ Public search MVP: the homepage can filter published rental homes by keyword, ci
 ## Development Status
 
 The repository contains the backend API and a frontend MVP. The frontend uses mock data by default and can be switched to the live API for integration testing.
+
+## CI quality gates
+
+GitHub Actions runs `CI Quality Gates` on pull requests targeting `main` and on pushes to `main`. The workflow uses minimal `contents: read` permissions and cancels outdated pull-request runs when a newer commit is pushed to the same PR.
+
+Jobs:
+
+- `Backend` uses the .NET SDK from `backend/global.json`, restores `backend/DailyRentalHomes.slnx`, builds Release, and runs the backend test suite in Release.
+- `Frontend` uses Node.js `22.12.0`, runs `npm ci`, and builds `clients/web-app`.
+- `Migrations` restores backend tools and generates an idempotent EF Core migration SQL script to a temporary runner path, then verifies the script is non-empty and includes EF migration history markers.
+
+CI intentionally uses the repository's test/default configuration and does not contact production services. It does not require Meta WhatsApp credentials, AWS/S3 credentials, production JWT secrets, production database credentials, Docker publishing, or deployment infrastructure. Recommended branch protection checks are `Backend`, `Frontend`, and `Migrations`.
