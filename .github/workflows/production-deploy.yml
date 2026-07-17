@@ -53,6 +53,8 @@ jobs:
   preflight:
     name: Pre-deployment validation
     runs-on: ubuntu-latest
+    environment:
+      name: production
 
     steps:
       - name: Checkout
@@ -85,6 +87,12 @@ jobs:
           NOTIFICATION_META_API_VERSION: ${{ secrets.NOTIFICATION_META_API_VERSION }}
           NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN }}
           NOTIFICATION_META_APP_SECRET: ${{ secrets.NOTIFICATION_META_APP_SECRET }}
+          VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
+          VPS_SSH_PORT: ${{ vars.VPS_SSH_PORT }}
+          VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+          VPS_DEPLOYMENT_DIRECTORY: ${{ vars.VPS_DEPLOYMENT_DIRECTORY }}
         run: |
           set -euo pipefail
           missing=0
@@ -138,6 +146,23 @@ jobs:
 
           if [ "$DEPLOYMENT_MODE" = "deploy" ]; then
             require_secret "PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED" "$PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED"
+            if [ "$PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED" != "true" ]; then
+              echo "::error title=Deployment target disabled::PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED must be set to true for deploy mode."
+              missing=1
+            fi
+            require_secret "VPS_SSH_HOST" "$VPS_SSH_HOST"
+            require_secret "VPS_SSH_USER" "$VPS_SSH_USER"
+            require_secret "VPS_SSH_PRIVATE_KEY" "$VPS_SSH_PRIVATE_KEY"
+            require_secret "VPS_SSH_KNOWN_HOSTS" "$VPS_SSH_KNOWN_HOSTS"
+            require_secret "VPS_DEPLOYMENT_DIRECTORY" "$VPS_DEPLOYMENT_DIRECTORY"
+            if [ -n "$VPS_SSH_PORT" ] && ! [[ "$VPS_SSH_PORT" =~ ^[0-9]+$ ]]; then
+              echo "::error title=Invalid VPS SSH port::VPS_SSH_PORT must be numeric when provided."
+              missing=1
+            fi
+            if [ -n "$VPS_DEPLOYMENT_DIRECTORY" ] && [[ "$VPS_DEPLOYMENT_DIRECTORY" != /* ]]; then
+              echo "::error title=Invalid VPS deployment directory::VPS_DEPLOYMENT_DIRECTORY must be an absolute Linux path."
+              missing=1
+            fi
           fi
 
           if [ "$missing" -ne 0 ]; then
@@ -347,7 +372,38 @@ jobs:
           DEPLOYMENT_ARTIFACTS_DIR: deployment-artifacts
           DEPLOYMENT_COMMIT_SHA: ${{ github.sha }}
           DEPLOYMENT_RUN_ID: ${{ github.run_id }}
-        run: bash scripts/deploy/production-deploy-placeholder.sh
+          FILE_STORAGE_PROVIDER: ${{ inputs.file_storage_provider }}
+          NOTIFICATION_PROVIDER: ${{ inputs.notification_provider }}
+          PRODUCTION_DATABASE_CONNECTION_STRING: ${{ secrets.PRODUCTION_DATABASE_CONNECTION_STRING }}
+          PRODUCTION_TOKEN_KEY: ${{ secrets.PRODUCTION_TOKEN_KEY }}
+          VPS_SSH_HOST: ${{ secrets.VPS_SSH_HOST }}
+          VPS_SSH_PORT: ${{ vars.VPS_SSH_PORT }}
+          VPS_SSH_USER: ${{ secrets.VPS_SSH_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+          VPS_DEPLOYMENT_DIRECTORY: ${{ vars.VPS_DEPLOYMENT_DIRECTORY }}
+          API_HTTP_PORT: ${{ vars.API_HTTP_PORT }}
+          FRONTEND_HTTP_PORT: ${{ vars.FRONTEND_HTTP_PORT }}
+          TOKEN_ISSUER: ${{ vars.TOKEN_ISSUER }}
+          TOKEN_AUDIENCE: ${{ vars.TOKEN_AUDIENCE }}
+          TOKEN_MINUTES: ${{ vars.TOKEN_MINUTES }}
+          NOTIFICATIONS_WORKER_ENABLED: ${{ vars.NOTIFICATIONS_WORKER_ENABLED }}
+          FILE_STORAGE_LOCAL_ROOT_PATH: ${{ vars.FILE_STORAGE_LOCAL_ROOT_PATH }}
+          FILE_STORAGE_LOCAL_PRIVATE_ROOT_PATH: ${{ vars.FILE_STORAGE_LOCAL_PRIVATE_ROOT_PATH }}
+          FILE_STORAGE_LOCAL_PUBLIC_BASE_PATH: ${{ vars.FILE_STORAGE_LOCAL_PUBLIC_BASE_PATH }}
+          FILE_STORAGE_S3_BUCKET_NAME: ${{ secrets.FILE_STORAGE_S3_BUCKET_NAME }}
+          FILE_STORAGE_S3_REGION: ${{ secrets.FILE_STORAGE_S3_REGION }}
+          FILE_STORAGE_S3_SERVICE_URL: ${{ secrets.FILE_STORAGE_S3_SERVICE_URL }}
+          FILE_STORAGE_S3_ACCESS_KEY: ${{ secrets.FILE_STORAGE_S3_ACCESS_KEY }}
+          FILE_STORAGE_S3_SECRET_KEY: ${{ secrets.FILE_STORAGE_S3_SECRET_KEY }}
+          FILE_STORAGE_S3_PUBLIC_BASE_URL: ${{ vars.FILE_STORAGE_S3_PUBLIC_BASE_URL }}
+          FILE_STORAGE_S3_FORCE_PATH_STYLE: ${{ vars.FILE_STORAGE_S3_FORCE_PATH_STYLE }}
+          NOTIFICATION_META_PHONE_NUMBER_ID: ${{ secrets.NOTIFICATION_META_PHONE_NUMBER_ID }}
+          NOTIFICATION_META_ACCESS_TOKEN: ${{ secrets.NOTIFICATION_META_ACCESS_TOKEN }}
+          NOTIFICATION_META_API_VERSION: ${{ secrets.NOTIFICATION_META_API_VERSION }}
+          NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN }}
+          NOTIFICATION_META_APP_SECRET: ${{ secrets.NOTIFICATION_META_APP_SECRET }}
+        run: bash scripts/deploy/production-vps-deploy.sh
 
   verify:
     name: Post-deployment verification
