@@ -105,6 +105,10 @@ builder.Services.AddOptions<NotificationWorkerOptions>()
     .Bind(builder.Configuration.GetSection(NotificationWorkerOptions.SectionName));
 builder.Services.AddOptions<DepositReminderOptions>()
     .Bind(builder.Configuration.GetSection(DepositReminderOptions.SectionName));
+builder.Services.AddOptions<BackgroundWorkerOptions>()
+    .Bind(builder.Configuration.GetSection(BackgroundWorkerOptions.SectionName))
+    .Validate(options => options.DistributedLocking.LeaseSeconds > 0, "BackgroundWorkers:DistributedLocking:LeaseSeconds must be positive.")
+    .ValidateOnStart();
 builder.Services.AddOptions<FileStorageOptions>()
     .Bind(builder.Configuration.GetSection(FileStorageOptions.SectionName))
     .Validate(options => string.Equals(options.Provider, "Local", StringComparison.OrdinalIgnoreCase), "Only Local file storage provider is supported.")
@@ -113,6 +117,7 @@ builder.Services.AddOptions<FileStorageOptions>()
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<INotificationOutboxService, NotificationOutboxService>();
 builder.Services.AddScoped<IDepositDeadlineReminderProcessingService, DepositDeadlineReminderProcessingService>();
+builder.Services.AddScoped<IDistributedLockManager, DatabaseDistributedLockManager>();
 builder.Services.AddNotificationDelivery(builder.Configuration);
 builder.Services.AddScoped<MetaWhatsAppWebhookService>();
 builder.Services.AddHostedService<NotificationDeliveryWorker>();

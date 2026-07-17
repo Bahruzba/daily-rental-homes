@@ -59,6 +59,7 @@ public sealed class DepositDeadlineReminderWorkerTests
         return new DepositDeadlineReminderWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new DepositReminderOptions { ProcessingIntervalMinutes = processingIntervalMinutes }),
+            Options.Create(new BackgroundWorkerOptions { DistributedLocking = new DistributedLockingOptions { Enabled = false, LeaseSeconds = 120 } }),
             NullLogger<DepositDeadlineReminderWorker>.Instance);
     }
 
