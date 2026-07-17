@@ -106,3 +106,5 @@ CI intentionally uses the repository's test/default configuration and does not c
 ## Production security
 
 Before production deployment, review [docs/production-security-checklist.md](docs/production-security-checklist.md). It covers JWT/database/Meta/S3 secrets, private deposit receipts, upload limitations, CORS, least-privilege storage permissions, and remaining MVP risks.
+
+Manual production deployment is documented in [docs/production-deployment.md](docs/production-deployment.md). The GitHub Actions workflow is manually triggered, packages backend/frontend/migration artifacts, and intentionally fails deploy mode until a real hosting target is configured.

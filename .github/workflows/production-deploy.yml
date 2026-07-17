@@ -1,0 +1,386 @@
+name: Manual Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: Run validation only, or attempt the configured deployment step.
+        required: true
+        default: validate-only
+        type: choice
+        options:
+          - validate-only
+          - deploy
+      file_storage_provider:
+        description: Production file-storage provider expected for this deployment.
+        required: true
+        default: S3
+        type: choice
+        options:
+          - Local
+          - S3
+      notification_provider:
+        description: Production notification provider expected for this deployment.
+        required: true
+        default: Fake
+        type: choice
+        options:
+          - Fake
+          - MetaWhatsApp
+      backend_base_url:
+        description: Optional production backend base URL for post-deployment verification.
+        required: false
+        type: string
+      frontend_base_url:
+        description: Optional production frontend base URL for post-deployment verification.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-production-deployment
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NODE_VERSION: '22.12.0'
+  BACKEND_SOLUTION: DailyRentalHomes.slnx
+
+jobs:
+  preflight:
+    name: Pre-deployment validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print deployment metadata
+        run: |
+          echo "Repository: ${GITHUB_REPOSITORY}"
+          echo "Ref: ${GITHUB_REF_NAME}"
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Run id: ${GITHUB_RUN_ID}"
+          echo "Mode: ${{ inputs.deployment_mode }}"
+
+      - name: Validate production configuration
+        shell: bash
+        env:
+          DEPLOYMENT_MODE: ${{ inputs.deployment_mode }}
+          FILE_STORAGE_PROVIDER: ${{ inputs.file_storage_provider }}
+          NOTIFICATION_PROVIDER: ${{ inputs.notification_provider }}
+          PRODUCTION_DATABASE_CONNECTION_STRING: ${{ secrets.PRODUCTION_DATABASE_CONNECTION_STRING }}
+          PRODUCTION_TOKEN_KEY: ${{ secrets.PRODUCTION_TOKEN_KEY }}
+          PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED: ${{ secrets.PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED }}
+          FILE_STORAGE_S3_BUCKET_NAME: ${{ secrets.FILE_STORAGE_S3_BUCKET_NAME }}
+          FILE_STORAGE_S3_REGION: ${{ secrets.FILE_STORAGE_S3_REGION }}
+          FILE_STORAGE_S3_SERVICE_URL: ${{ secrets.FILE_STORAGE_S3_SERVICE_URL }}
+          FILE_STORAGE_S3_ACCESS_KEY: ${{ secrets.FILE_STORAGE_S3_ACCESS_KEY }}
+          FILE_STORAGE_S3_SECRET_KEY: ${{ secrets.FILE_STORAGE_S3_SECRET_KEY }}
+          NOTIFICATION_META_PHONE_NUMBER_ID: ${{ secrets.NOTIFICATION_META_PHONE_NUMBER_ID }}
+          NOTIFICATION_META_ACCESS_TOKEN: ${{ secrets.NOTIFICATION_META_ACCESS_TOKEN }}
+          NOTIFICATION_META_API_VERSION: ${{ secrets.NOTIFICATION_META_API_VERSION }}
+          NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN }}
+          NOTIFICATION_META_APP_SECRET: ${{ secrets.NOTIFICATION_META_APP_SECRET }}
+        run: |
+          set -euo pipefail
+          missing=0
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::error title=Missing production secret::$name is required for this deployment configuration."
+              missing=1
+            fi
+          }
+
+          require_secret "PRODUCTION_DATABASE_CONNECTION_STRING" "$PRODUCTION_DATABASE_CONNECTION_STRING"
+          require_secret "PRODUCTION_TOKEN_KEY" "$PRODUCTION_TOKEN_KEY"
+
+          if [ -n "$PRODUCTION_TOKEN_KEY" ]; then
+            if [ "${#PRODUCTION_TOKEN_KEY}" -lt 32 ]; then
+              echo "::error title=Unsafe production JWT key::PRODUCTION_TOKEN_KEY must be at least 32 bytes."
+              missing=1
+            fi
+
+            case "$PRODUCTION_TOKEN_KEY" in
+              *LOCAL_DEVELOPMENT_KEY*|*CHANGE_ME*|*DO_NOT_COMMIT*|*TEST_SIGNING_KEY*|*PLACEHOLDER*|*YOUR_SECRET*|*YOUR_*)
+                echo "::error title=Unsafe production JWT key::PRODUCTION_TOKEN_KEY uses a known placeholder/development marker."
+                missing=1
+                ;;
+            esac
+          fi
+
+          if [ "$FILE_STORAGE_PROVIDER" = "S3" ]; then
+            require_secret "FILE_STORAGE_S3_BUCKET_NAME" "$FILE_STORAGE_S3_BUCKET_NAME"
+            if [ -z "$FILE_STORAGE_S3_REGION" ] && [ -z "$FILE_STORAGE_S3_SERVICE_URL" ]; then
+              echo "::error title=Missing S3 endpoint configuration::Set FILE_STORAGE_S3_REGION for AWS S3 or FILE_STORAGE_S3_SERVICE_URL for an S3-compatible provider."
+              missing=1
+            fi
+            if { [ -n "$FILE_STORAGE_S3_ACCESS_KEY" ] && [ -z "$FILE_STORAGE_S3_SECRET_KEY" ]; } ||
+               { [ -z "$FILE_STORAGE_S3_ACCESS_KEY" ] && [ -n "$FILE_STORAGE_S3_SECRET_KEY" ]; }; then
+              echo "::error title=Incomplete S3 credentials::FILE_STORAGE_S3_ACCESS_KEY and FILE_STORAGE_S3_SECRET_KEY must be provided together, or both omitted for provider credentials."
+              missing=1
+            fi
+          fi
+
+          if [ "$NOTIFICATION_PROVIDER" = "MetaWhatsApp" ]; then
+            require_secret "NOTIFICATION_META_PHONE_NUMBER_ID" "$NOTIFICATION_META_PHONE_NUMBER_ID"
+            require_secret "NOTIFICATION_META_ACCESS_TOKEN" "$NOTIFICATION_META_ACCESS_TOKEN"
+            require_secret "NOTIFICATION_META_API_VERSION" "$NOTIFICATION_META_API_VERSION"
+            require_secret "NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN" "$NOTIFICATION_META_WEBHOOK_VERIFY_TOKEN"
+            require_secret "NOTIFICATION_META_APP_SECRET" "$NOTIFICATION_META_APP_SECRET"
+          fi
+
+          if [ "$DEPLOYMENT_MODE" = "deploy" ]; then
+            require_secret "PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED" "$PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED"
+          fi
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "Production configuration presence check passed. Secret values were not printed."
+
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    needs: preflight
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/global.json', 'backend/dotnet-tools.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore "$BACKEND_SOLUTION"
+
+      - name: Build
+        working-directory: backend
+        run: dotnet build "$BACKEND_SOLUTION" --no-restore --configuration Release
+
+      - name: Test
+        working-directory: backend
+        run: dotnet test "$BACKEND_SOLUTION" --no-build --no-restore --configuration Release
+
+      - name: Publish backend
+        working-directory: backend
+        run: >
+          dotnet publish src/DailyRentalHomes.Api/DailyRentalHomes.Api.csproj
+          --configuration Release
+          --no-build
+          --output "${{ runner.temp }}/backend-publish"
+          /p:UseAppHost=false
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish-${{ github.sha }}
+          path: ${{ runner.temp }}/backend-publish
+          if-no-files-found: error
+          retention-days: 14
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    needs: preflight
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: clients/web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: clients/web-app
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: clients/web-app
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: clients/web-app/dist
+          if-no-files-found: error
+          retention-days: 14
+
+  migrations:
+    name: Migrations
+    runs-on: ubuntu-latest
+    needs: preflight
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('backend/**/*.csproj', 'backend/global.json', 'backend/dotnet-tools.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        working-directory: backend
+        run: dotnet restore "$BACKEND_SOLUTION"
+
+      - name: Restore .NET tools
+        working-directory: backend
+        run: dotnet tool restore
+
+      - name: Generate idempotent migration script
+        working-directory: backend
+        run: >
+          dotnet tool run dotnet-ef migrations script
+          --idempotent
+          --configuration Release
+          --project src/DailyRentalHomes.Infrastructure
+          --startup-project src/DailyRentalHomes.Api
+          --output "${{ runner.temp }}/migrations-idempotent.sql"
+
+      - name: Validate migration script output
+        shell: bash
+        run: |
+          test -s "${RUNNER_TEMP}/migrations-idempotent.sql"
+          grep -q "__EFMigrationsHistory" "${RUNNER_TEMP}/migrations-idempotent.sql"
+
+      - name: Upload migration artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: migrations-idempotent-${{ github.sha }}
+          path: ${{ runner.temp }}/migrations-idempotent.sql
+          if-no-files-found: error
+          retention-days: 30
+
+  docker-image:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build production Docker image
+        run: docker build -f backend/Dockerfile -t daily-rental-homes-api:${{ github.sha }} .
+
+  deploy:
+    name: Production deployment gate
+    runs-on: ubuntu-latest
+    needs:
+      - backend
+      - frontend
+      - migrations
+      - docker-image
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-publish-${{ github.sha }}
+          path: deployment-artifacts/backend
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: deployment-artifacts/frontend
+
+      - name: Download migration artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: migrations-idempotent-${{ github.sha }}
+          path: deployment-artifacts/migrations
+
+      - name: Deployment metadata
+        run: |
+          echo "Commit: ${GITHUB_SHA}"
+          echo "Ref: ${GITHUB_REF_NAME}"
+          echo "Run id: ${GITHUB_RUN_ID}"
+          find deployment-artifacts -maxdepth 2 -type f | sed 's#^#Artifact: #'
+
+      - name: Validate-only mode
+        if: ${{ inputs.deployment_mode == 'validate-only' }}
+        run: |
+          echo "Validation-only mode selected. Artifacts were built and downloaded, but no production deployment was attempted."
+
+      - name: Run configured production deployment
+        if: ${{ inputs.deployment_mode == 'deploy' }}
+        env:
+          PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED: ${{ secrets.PRODUCTION_DEPLOYMENT_TARGET_CONFIGURED }}
+          DEPLOYMENT_ARTIFACTS_DIR: deployment-artifacts
+          DEPLOYMENT_COMMIT_SHA: ${{ github.sha }}
+          DEPLOYMENT_RUN_ID: ${{ github.run_id }}
+        run: bash scripts/deploy/production-deploy-placeholder.sh
+
+  verify:
+    name: Post-deployment verification
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ inputs.deployment_mode == 'deploy' }}
+
+    steps:
+      - name: Verify backend health and public API
+        shell: bash
+        env:
+          BACKEND_BASE_URL: ${{ inputs.backend_base_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BACKEND_BASE_URL" ]; then
+            echo "::error title=Missing backend URL::backend_base_url is required for deploy-mode verification."
+            exit 1
+          fi
+
+          base="${BACKEND_BASE_URL%/}"
+          curl --fail --silent --show-error "$base/health"
+          curl --fail --silent --show-error "$base/health/ready"
+          curl --fail --silent --show-error "$base/api/rental-homes" >/dev/null
+
+      - name: Verify frontend availability
+        shell: bash
+        env:
+          FRONTEND_BASE_URL: ${{ inputs.frontend_base_url }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FRONTEND_BASE_URL" ]; then
+            echo "frontend_base_url was not provided; frontend verification skipped explicitly."
+            exit 0
+          fi
+
+          curl --fail --silent --show-error "${FRONTEND_BASE_URL%/}" >/dev/null
