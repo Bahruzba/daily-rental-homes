@@ -91,6 +91,7 @@ export function BrokerBookingDetailPage() {
   const [expenseNote, setExpenseNote] = useState('')
   const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null)
   const [cancellationDecisionNote, setCancellationDecisionNote] = useState('')
+  const [receiptOpening, setReceiptOpening] = useState(false)
 
   const totalExpenses = useMemo(() => expenses.reduce((sum, item) => sum + item.amount, 0), [expenses])
   const estimatedProfit = (booking?.totalAmount ?? 0) - totalExpenses
@@ -338,6 +339,31 @@ export function BrokerBookingDetailPage() {
     }, message)
   }
 
+  const openReceipt = async (url: string) => {
+    if (!session) return
+    setError('')
+    setReceiptOpening(true)
+    try {
+      const resolvedUrl = resolveApiAssetUrl(url)
+      if (!url.startsWith('/api/')) {
+        window.open(resolvedUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+
+      const response = await fetch(resolvedUrl, { headers: { Authorization: `Bearer ${session.accessToken}` } })
+      if (!response.ok) throw new Error('Receipt download failed')
+      const blob = await response.blob()
+      const objectUrl = window.URL.createObjectURL(blob)
+      window.open(objectUrl, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000)
+    } catch (cause) {
+      console.error('Receipt open failed', cause)
+      setError('Qəbzi açmaq mümkün olmadı.')
+    } finally {
+      setReceiptOpening(false)
+    }
+  }
+
   return (
     <AppLayout>
       <section className="broker-detail-page">
@@ -450,9 +476,9 @@ export function BrokerBookingDetailPage() {
                         {booking.deposit.receipt && (
                           <div className="deposit-receipt">
                             <span>Yüklənmiş qəbz</span>
-                            <a href={resolveApiAssetUrl(booking.deposit.receipt.fileUrl)} target="_blank" rel="noreferrer">
-                              <img src={resolveApiAssetUrl(booking.deposit.receipt.fileUrl)} alt="Beh qəbzi" /><Upload size={15} /> Qəbzi aç
-                            </a>
+                            <button className="button button-ghost" type="button" disabled={receiptOpening} onClick={() => void openReceipt(booking.deposit!.receipt!.fileUrl)}>
+                              <Upload size={15} /> {receiptOpening ? 'Qəbz açılır…' : 'Qəbzi aç'}
+                            </button>
                           </div>
                         )}
                         {booking.deposit.reviewNote && <p className="deposit-review-note">Yoxlama qeydi: {booking.deposit.reviewNote}</p>}

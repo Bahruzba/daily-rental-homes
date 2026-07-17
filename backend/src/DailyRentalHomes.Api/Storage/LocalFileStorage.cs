@@ -6,6 +6,7 @@ namespace DailyRentalHomes.Api.Storage;
 public sealed class LocalFileStorage : IFileStorage
 {
     private readonly string _rootPath;
+    private readonly string _privateRootPath;
     private readonly string _publicBasePath;
 
     public LocalFileStorage(IOptions<FileStorageOptions> options, IWebHostEnvironment environment)
@@ -28,8 +29,15 @@ public sealed class LocalFileStorage : IFileStorage
         _rootPath = Path.GetFullPath(Path.IsPathRooted(rootPath)
             ? rootPath
             : Path.Combine(webRoot, rootPath));
+        var privateRootPath = string.IsNullOrWhiteSpace(storageOptions.Local.PrivateRootPath)
+            ? "private-uploads"
+            : storageOptions.Local.PrivateRootPath.Trim();
+        _privateRootPath = Path.GetFullPath(Path.IsPathRooted(privateRootPath)
+            ? privateRootPath
+            : Path.Combine(environment.ContentRootPath, privateRootPath));
         _publicBasePath = NormalizePublicBasePath(storageOptions.Local.PublicBasePath);
         Directory.CreateDirectory(_rootPath);
+        Directory.CreateDirectory(_privateRootPath);
     }
 
     public async Task<StoredFile> SaveAsync(string key, Stream content, CancellationToken cancellationToken)
@@ -44,13 +52,39 @@ public sealed class LocalFileStorage : IFileStorage
         return new StoredFile(normalizedKey, GetPublicUrl(normalizedKey));
     }
 
+    public async Task<StoredFile> SavePrivateAsync(string key, Stream content, CancellationToken cancellationToken)
+    {
+        var normalizedKey = NormalizeKey(key);
+        var fullPath = GetPrivateFullPath(normalizedKey);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+        await using var output = File.Create(fullPath);
+        await content.CopyToAsync(output, cancellationToken);
+
+        return new StoredFile(normalizedKey, normalizedKey);
+    }
+
+    public Task<StoredFileReadResult?> OpenReadAsync(string keyOrUrl, CancellationToken cancellationToken)
+    {
+        var location = ResolveReadLocation(keyOrUrl);
+        if (!File.Exists(location.FullPath))
+        {
+            return Task.FromResult<StoredFileReadResult?>(null);
+        }
+
+        Stream stream = File.OpenRead(location.FullPath);
+        return Task.FromResult<StoredFileReadResult?>(new StoredFileReadResult(stream, location.Key));
+    }
+
     public Task DeleteAsync(string keyOrUrl, CancellationToken cancellationToken)
     {
-        var normalizedKey = NormalizeKeyOrUrl(keyOrUrl);
-        var fullPath = GetFullPath(normalizedKey);
-        if (File.Exists(fullPath))
+        var locations = ResolveDeleteLocations(keyOrUrl);
+        foreach (var location in locations)
         {
-            File.Delete(fullPath);
+            if (File.Exists(location.FullPath))
+            {
+                File.Delete(location.FullPath);
+            }
         }
 
         return Task.CompletedTask;
@@ -60,9 +94,19 @@ public sealed class LocalFileStorage : IFileStorage
 
     private string GetFullPath(string normalizedKey)
     {
-        var fullPath = Path.GetFullPath(Path.Combine(_rootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar)));
-        if (!fullPath.StartsWith(_rootPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(fullPath, _rootPath, StringComparison.OrdinalIgnoreCase))
+        return GetSafeFullPath(_rootPath, normalizedKey);
+    }
+
+    private string GetPrivateFullPath(string normalizedKey)
+    {
+        return GetSafeFullPath(_privateRootPath, normalizedKey);
+    }
+
+    private static string GetSafeFullPath(string rootPath, string normalizedKey)
+    {
+        var fullPath = Path.GetFullPath(Path.Combine(rootPath, normalizedKey.Replace('/', Path.DirectorySeparatorChar)));
+        if (!fullPath.StartsWith(rootPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(fullPath, rootPath, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("File storage key resolves outside the configured root.");
         }
@@ -83,6 +127,34 @@ public sealed class LocalFileStorage : IFileStorage
         }
 
         return NormalizeKey(value);
+    }
+
+    private StorageLocation ResolveReadLocation(string keyOrUrl)
+    {
+        var normalizedKey = NormalizeKeyOrUrl(keyOrUrl);
+        var isPublicUrl = keyOrUrl.Trim().StartsWith(_publicBasePath + "/", StringComparison.OrdinalIgnoreCase);
+        var fullPath = isPublicUrl
+            ? GetFullPath(normalizedKey)
+            : File.Exists(GetPrivateFullPath(normalizedKey))
+                ? GetPrivateFullPath(normalizedKey)
+                : GetFullPath(normalizedKey);
+        return new StorageLocation(normalizedKey, fullPath);
+    }
+
+    private IReadOnlyList<StorageLocation> ResolveDeleteLocations(string keyOrUrl)
+    {
+        var normalizedKey = NormalizeKeyOrUrl(keyOrUrl);
+        var isPublicUrl = keyOrUrl.Trim().StartsWith(_publicBasePath + "/", StringComparison.OrdinalIgnoreCase);
+        if (isPublicUrl)
+        {
+            return [new StorageLocation(normalizedKey, GetFullPath(normalizedKey))];
+        }
+
+        return
+        [
+            new StorageLocation(normalizedKey, GetPrivateFullPath(normalizedKey)),
+            new StorageLocation(normalizedKey, GetFullPath(normalizedKey))
+        ];
     }
 
     private static string NormalizeKey(string key)
@@ -114,4 +186,6 @@ public sealed class LocalFileStorage : IFileStorage
         var normalized = "/" + value.Trim().Replace('\\', '/').Trim('/');
         return normalized == "/" ? "/uploads" : normalized;
     }
+
+    private sealed record StorageLocation(string Key, string FullPath);
 }

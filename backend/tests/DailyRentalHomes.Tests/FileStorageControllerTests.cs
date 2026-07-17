@@ -7,6 +7,7 @@ using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
 using DailyRentalHomes.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -47,9 +48,120 @@ public sealed class FileStorageControllerTests
         var result = await controller.UploadDepositReceipt(1001, FormFile("receipt.png", "image/png"), default);
 
         Assert.IsType<OkObjectResult>(result);
-        Assert.Single(storage.SavedKeys, key => key.StartsWith("deposit-receipts/", StringComparison.Ordinal));
+        Assert.Single(storage.PrivateSavedKeys, key => key.StartsWith("deposit-receipts/", StringComparison.Ordinal));
         var receipt = await context.MediaFiles.SingleAsync(item => item.FileType == MediaFileType.DepositReceipt);
-        Assert.Equal(storage.SavedUrls.Single(), receipt.FileUrl);
+        Assert.Equal(storage.PrivateSavedUrls.Single(), receipt.FileUrl);
+        Assert.False(receipt.FileUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task CustomerCanDownloadOwnDepositReceipt()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        var storage = new RecordingFileStorage();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, storage, 30, UserRole.Customer);
+
+        var result = await controller.Download(1001, default);
+
+        var file = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("image/png", file.ContentType);
+        Assert.Equal("receipt.png", file.FileDownloadName);
+        Assert.Contains("deposit-receipts/receipt.png", storage.OpenedKeysOrUrls);
+    }
+
+    [Fact]
+    public async Task AnotherCustomerCannotDownloadReceipt()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        context.Users.Add(new User { Id = 31, FullName = "Other Customer", PhoneNumber = "+994501000031", Role = UserRole.Customer });
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, new RecordingFileStorage(), 31, UserRole.Customer);
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task OwningBrokerCanDownloadReceipt()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, new RecordingFileStorage(), 10, UserRole.Broker);
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<FileStreamResult>(result);
+    }
+
+    [Fact]
+    public async Task UnrelatedBrokerCannotDownloadReceipt()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        context.Users.Add(new User { Id = 20, FullName = "Other Broker", PhoneNumber = "+994501000020", Role = UserRole.Broker });
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, new RecordingFileStorage(), 20, UserRole.Broker);
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task AdminCanDownloadReceipt()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        context.Users.Add(new User { Id = 1, FullName = "Admin", PhoneNumber = "+994501000001", Role = UserRole.Admin });
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        await AddUploadedReceipt(context, "deposit-receipts/receipt.png");
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, new RecordingFileStorage(), 1, UserRole.Admin);
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<FileStreamResult>(result);
+    }
+
+    [Fact]
+    public async Task MissingReceiptReturnsNotFound()
+    {
+        await using var context = CreateContext();
+        SeedUsersAndHome(context);
+        SeedBookingWithDeposit(context);
+        await context.SaveChangesAsync();
+        var controller = DepositReceiptsController(context, new RecordingFileStorage(), 30, UserRole.Customer);
+
+        var result = await controller.Download(1001, default);
+
+        Assert.IsType<NotFoundObjectResult>(result);
+    }
+
+    [Fact]
+    public void DepositReceiptDownloadRequiresAuthentication()
+    {
+        var attribute = Assert.Single(typeof(DepositReceiptsController)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>());
+        Assert.Null(attribute.Policy);
     }
 
     [Fact]
@@ -130,6 +242,21 @@ public sealed class FileStorageControllerTests
         });
     }
 
+    private static async Task AddUploadedReceipt(AppDbContext context, string fileUrl)
+    {
+        var deposit = await context.BookingDeposits.Include(item => item.ReceiptFiles).SingleAsync();
+        deposit.Status = BookingDepositStatus.ReceiptUploaded;
+        deposit.UploadedAt = DateTime.UtcNow;
+        deposit.ReceiptFiles.Add(new MediaFile
+        {
+            FileType = MediaFileType.DepositReceipt,
+            FileName = "receipt.png",
+            FileUrl = fileUrl,
+            ContentType = "image/png",
+            SizeBytes = 4
+        });
+    }
+
     private static BrokerRentalHomesController BrokerRentalHomesController(AppDbContext context, IFileStorage storage, long userId, UserRole role) => new(context, storage)
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, role) } }
@@ -138,6 +265,11 @@ public sealed class FileStorageControllerTests
     private static AccountController AccountController(AppDbContext context, IFileStorage storage, long userId) => new(context, storage, new NotificationOutboxService(context))
     {
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Customer) } }
+    };
+
+    private static DepositReceiptsController DepositReceiptsController(AppDbContext context, IFileStorage storage, long userId, UserRole role) => new(context, storage)
+    {
+        ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, role) } }
     };
 
     private static IFormFile FormFile(string fileName, string contentType)
@@ -161,7 +293,10 @@ public sealed class FileStorageControllerTests
     {
         public List<string> SavedKeys { get; } = [];
         public List<string> SavedUrls { get; } = [];
+        public List<string> PrivateSavedKeys { get; } = [];
+        public List<string> PrivateSavedUrls { get; } = [];
         public List<string> DeletedKeysOrUrls { get; } = [];
+        public List<string> OpenedKeysOrUrls { get; } = [];
 
         public Task<StoredFile> SaveAsync(string key, Stream content, CancellationToken cancellationToken)
         {
@@ -169,6 +304,19 @@ public sealed class FileStorageControllerTests
             var url = GetPublicUrl(key);
             SavedUrls.Add(url);
             return Task.FromResult(new StoredFile(key, url));
+        }
+
+        public Task<StoredFile> SavePrivateAsync(string key, Stream content, CancellationToken cancellationToken)
+        {
+            PrivateSavedKeys.Add(key);
+            PrivateSavedUrls.Add(key);
+            return Task.FromResult(new StoredFile(key, key));
+        }
+
+        public Task<StoredFileReadResult?> OpenReadAsync(string keyOrUrl, CancellationToken cancellationToken)
+        {
+            OpenedKeysOrUrls.Add(keyOrUrl);
+            return Task.FromResult<StoredFileReadResult?>(new StoredFileReadResult(new MemoryStream([1, 2, 3, 4]), keyOrUrl));
         }
 
         public Task DeleteAsync(string keyOrUrl, CancellationToken cancellationToken)

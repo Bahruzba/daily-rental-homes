@@ -164,7 +164,8 @@ public sealed class DepositFlowControllerTests
         Assert.Equal(DepositStatusCodes.ReceiptUploaded, response.StatusCode);
         var media = await context.MediaFiles.SingleAsync(item => item.FileType == MediaFileType.DepositReceipt);
         Assert.Equal(MediaFileType.DepositReceipt, media.FileType);
-        Assert.True(File.Exists(Path.Combine(environment.WebRootPath, media.FileUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar))));
+        Assert.False(media.FileUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase));
+        Assert.True(File.Exists(Path.Combine(environment.ContentRootPath, "private-uploads", media.FileUrl.Replace('/', Path.DirectorySeparatorChar))));
         Assert.Contains(await context.OutboundMessages.ToListAsync(), item => item.TypeCode == NotificationTypeCodes.DepositReceiptUploaded && item.RecipientUserId == 10);
     }
 
