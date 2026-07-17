@@ -125,7 +125,8 @@ builder.Services.AddHostedService<DepositDeadlineReminderWorker>();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: ["live"])
-    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+    .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
+    .AddCheck<FileStorageHealthCheck>("file-storage", tags: ["ready"]);
 
 var app = builder.Build();
 

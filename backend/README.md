@@ -193,6 +193,47 @@ build.ps1
 build.sh
 ```
 
+## Deployment smoke validation
+
+Migration script verification:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-migrations.ps1
+```
+
+This generates an idempotent EF migration script under `backend/artifacts/` and fails if the script is missing or empty. It does not apply migrations or mutate any database.
+
+Production-like smoke validation:
+
+```powershell
+$env:ConnectionStrings__DefaultConnection="Server=127.0.0.1;Database=DailyRentalHomes;User Id=sa;Password=Your_strong_password123;TrustServerCertificate=True"
+$env:Token__Key="CHANGE_ME_TO_A_SECURE_32_BYTE_MINIMUM_SECRET"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deployment-smoke.ps1
+```
+
+The smoke script:
+
+- verifies an idempotent migration script can be generated
+- builds the backend
+- starts the API with `ASPNETCORE_ENVIRONMENT=Production`
+- uses the Fake notification provider, so real Meta credentials are not required
+- enables database-backed distributed locking
+- configures Local file storage under a smoke upload root
+- checks `/health`
+- checks `/health/ready`
+- verifies Local storage root creation
+- calls one basic public API request
+- runs frontend `npm run build` unless `-SkipFrontendBuild` is passed
+
+The script requires a reachable SQL Server database and does not apply migrations automatically. Apply migrations first with the normal EF command, or use a disposable smoke database that already has the current schema.
+
+When applying migrations from the command line, set `DAILY_RENTAL_HOMES_CONNECTION_STRING` as well because the EF design-time factory reads that variable:
+
+```powershell
+$env:DAILY_RENTAL_HOMES_CONNECTION_STRING=$env:ConnectionStrings__DefaultConnection
+dotnet ef database update --project .\src\DailyRentalHomes.Infrastructure --startup-project .\src\DailyRentalHomes.Api
+```
+
 ## MVP Endpoints
 
 ### Health
@@ -201,7 +242,7 @@ build.sh
 - GET /health
 - GET /health/ready
 
-`/health` is a lightweight application liveness endpoint. `/health/ready` checks SQL Server connectivity and returns unhealthy if the configured database is unavailable. The older `/api/health` endpoint remains for backward compatibility and returns `ok`.
+`/health` is a lightweight application liveness endpoint. `/health/ready` checks SQL Server connectivity, pending EF migrations, and file storage configuration. It returns unhealthy if the configured database is unavailable, the schema is not migrated, or file storage cannot be resolved. The older `/api/health` endpoint remains for backward compatibility and returns `ok`.
 
 ### Auth
 
@@ -558,7 +599,7 @@ Admin users can manually retry a failed/exhausted notification through:
 
 - POST /api/admin/notifications/{id}/retry
 
-Manual retry resets the outbox row to a fresh pending attempt and immediately uses the same `INotificationDeliveryProvider` delivery path. It does not bypass provider authentication, phone normalization, Meta template request building, or provider message-id persistence. Messages are never deleted by delivery processing. This PR does not add distributed locks, external queues, Meta webhooks beyond the existing status webhook, inbound WhatsApp messages, template CRUD, SMS/email fallback, or a second retry framework.
+Manual retry resets the outbox row to a fresh pending attempt and immediately uses the same `INotificationDeliveryProvider` delivery path. It does not bypass provider authentication, phone normalization, Meta template request building, or provider message-id persistence. Messages are never deleted by delivery processing. Background notification delivery uses the `notification-delivery-worker` distributed lock when the worker is enabled; manual Admin retry remains an explicit operational action. This PR does not add external queues, inbound WhatsApp messages, template CRUD, SMS/email fallback, or a second retry framework.
 
 Meta WhatsApp delivery status webhooks are supported for outbound delivery visibility:
 
