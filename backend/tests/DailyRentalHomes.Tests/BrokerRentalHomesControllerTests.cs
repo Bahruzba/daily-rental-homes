@@ -720,7 +720,8 @@ public sealed class BrokerRentalHomesControllerTests
     private static BrokerRentalHomesController CreateController(AppDbContext context, long brokerId)
     {
         var tempRoot = Path.Combine(Path.GetTempPath(), "daily-rental-homes-tests", Guid.NewGuid().ToString("N"));
-        return new BrokerRentalHomesController(context, new TestWebHostEnvironment(tempRoot))
+        var environment = new TestWebHostEnvironment(tempRoot);
+        return new BrokerRentalHomesController(context, TestFileStorageFactory.Create(environment))
         {
             ControllerContext = new ControllerContext
             {

@@ -242,11 +242,14 @@ public sealed class ExpiredDepositDeadlineTests
         ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(1, UserRole.Admin) } }
     };
 
-    private static AccountController AccountController(AppDbContext context, long userId) =>
-        new(context, new TestEnvironment(), new NotificationOutboxService(context))
+    private static AccountController AccountController(AppDbContext context, long userId)
+    {
+        var environment = new TestEnvironment();
+        return new AccountController(context, TestFileStorageFactory.Create(environment), new NotificationOutboxService(context))
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = Principal(userId, UserRole.Customer) } }
         };
+    }
 
     private static ClaimsPrincipal Principal(long userId, UserRole role) => new(new ClaimsIdentity(
         [new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()), new Claim(ClaimTypes.Role, role.ToString())],

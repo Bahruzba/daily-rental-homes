@@ -3,6 +3,7 @@ using DailyRentalHomes.Api.Contracts.Account;
 using DailyRentalHomes.Api.Contracts.Deposits;
 using DailyRentalHomes.Api.Security;
 using DailyRentalHomes.Api.Services;
+using DailyRentalHomes.Api.Storage;
 using DailyRentalHomes.Domain.Constants;
 using DailyRentalHomes.Domain.Entities;
 using DailyRentalHomes.Domain.Enums;
@@ -36,13 +37,13 @@ public sealed class AccountController : ControllerBase
         };
 
     private readonly AppDbContext _db;
-    private readonly IWebHostEnvironment _environment;
+    private readonly IFileStorage _fileStorage;
     private readonly INotificationOutboxService _notifications;
 
-    public AccountController(AppDbContext db, IWebHostEnvironment environment, INotificationOutboxService notifications)
+    public AccountController(AppDbContext db, IFileStorage fileStorage, INotificationOutboxService notifications)
     {
         _db = db;
-        _environment = environment;
+        _fileStorage = fileStorage;
         _notifications = notifications;
     }
 
@@ -123,18 +124,10 @@ public sealed class AccountController : ControllerBase
             return BadRequest(ApiResponse<object>.Fail("A receipt cannot be uploaded for the current deposit status."));
         }
 
-        var webRoot = string.IsNullOrWhiteSpace(_environment.WebRootPath)
-            ? Path.Combine(_environment.ContentRootPath, "wwwroot")
-            : _environment.WebRootPath;
-        var uploadDirectory = Path.Combine(webRoot, "uploads", "deposit-receipts");
-        Directory.CreateDirectory(uploadDirectory);
         var storedName = $"{Guid.NewGuid():N}{extension}";
-        var fullPath = Path.Combine(uploadDirectory, storedName);
-
-        await using (var stream = System.IO.File.Create(fullPath))
-        {
-            await file.CopyToAsync(stream, cancellationToken);
-        }
+        var storageKey = $"deposit-receipts/{storedName}";
+        await using var input = file.OpenReadStream();
+        var storedFile = await _fileStorage.SaveAsync(storageKey, input, cancellationToken);
 
         foreach (var existing in deposit.ReceiptFiles.Where(item => item.FileType == MediaFileType.DepositReceipt && !item.IsDeleted))
         {
@@ -148,7 +141,7 @@ public sealed class AccountController : ControllerBase
             BookingDepositId = deposit.Id,
             FileType = MediaFileType.DepositReceipt,
             FileName = originalName[..Math.Min(originalName.Length, 255)],
-            FileUrl = $"/uploads/deposit-receipts/{storedName}",
+            FileUrl = storedFile.Url,
             ContentType = file.ContentType,
             SizeBytes = file.Length,
             CreatedByUserId = User.GetUserId()
@@ -167,7 +160,7 @@ public sealed class AccountController : ControllerBase
         }
         catch
         {
-            System.IO.File.Delete(fullPath);
+            await _fileStorage.DeleteAsync(storedFile.Key, CancellationToken.None);
             throw;
         }
 
