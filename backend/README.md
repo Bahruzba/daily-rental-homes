@@ -49,7 +49,7 @@ Important environment variables:
 - `ConnectionStrings__DefaultConnection` — SQL Server connection string used by EF Core.
 - `Token__Issuer`
 - `Token__Audience`
-- `Token__Key` — must be at least 32 bytes and must be replaced with a secure secret outside local development.
+- `Token__Key` — must be at least 32 bytes and must be replaced with a unique secure secret outside local development. Known development/placeholder values are rejected outside `Development`.
 - `Token__Minutes`
 - `Notifications__WorkerEnabled` — defaults to `false`.
 - `Notifications__PollSeconds` — defaults to `30`.
@@ -142,13 +142,14 @@ docker run --rm -p 5099:8080 \
   -e ConnectionStrings__DefaultConnection="Server=host.docker.internal;Database=DailyRentalHomes;User Id=sa;Password=Your_strong_password123;TrustServerCertificate=True" \
   -e Token__Issuer=DailyRentalHomes \
   -e Token__Audience=DailyRentalHomesClients \
-  -e Token__Key=CHANGE_ME_TO_A_SECURE_32_BYTE_MINIMUM_SECRET \
+  -e Token__Key="$(openssl rand -base64 48)" \
   daily-rental-homes-api
 ```
 
-Start the API with a local SQL Server container:
+Start the API with a local SQL Server container. Set a local compose JWT secret first:
 
 ```bash
+export TOKEN_KEY="$(openssl rand -base64 48)"
 docker compose up --build
 ```
 
@@ -164,7 +165,7 @@ cd backend
 dotnet ef database update --project src/DailyRentalHomes.Infrastructure --startup-project src/DailyRentalHomes.Api
 ```
 
-The compose API service runs with `ASPNETCORE_ENVIRONMENT=Production` so it does not execute the Development-only local seed before migrations exist. For local non-container development, continue to use the `dotnet run` Development command above.
+The compose API service runs with `ASPNETCORE_ENVIRONMENT=Production` so it does not execute the Development-only local seed before migrations exist. The compose file intentionally does not commit a JWT signing key; set `TOKEN_KEY` locally before starting it. For local non-container development, continue to use the `dotnet run` Development command above.
 
 ## Database
 

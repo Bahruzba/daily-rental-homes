@@ -58,11 +58,13 @@ builder.Services.AddOptions<JwtOptions>()
     .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer), "Token issuer is required.")
     .Validate(options => !string.IsNullOrWhiteSpace(options.Audience), "Token audience is required.")
     .Validate(options => Encoding.UTF8.GetByteCount(options.Key) >= 32, "Token key must be at least 32 bytes.")
+    .Validate(options => JwtSecretValidator.IsAllowed(options.Key, builder.Environment.EnvironmentName), "Token key must not use a known development or placeholder value outside Development.")
     .Validate(options => options.Minutes > 0, "Token lifetime must be positive.")
     .ValidateOnStart();
 
 var jwtOptions = jwtSection.Get<JwtOptions>()
     ?? throw new InvalidOperationException("Token configuration is missing.");
+JwtSecretValidator.ThrowIfUnsafe(jwtOptions.Key, builder.Environment.EnvironmentName);
 var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key));
 
 builder.Services
