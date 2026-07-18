@@ -335,6 +335,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: backend/global.json
+
       - name: Download backend artifact
         uses: actions/download-artifact@v4
         with:
@@ -364,6 +369,22 @@ jobs:
         if: ${{ inputs.deployment_mode == 'validate-only' }}
         run: |
           echo "Validation-only mode selected. Artifacts were built and downloaded, but no production deployment was attempted."
+
+      - name: Execute production database migrations
+        if: ${{ inputs.deployment_mode == 'deploy' }}
+        env:
+          PRODUCTION_DATABASE_CONNECTION_STRING: ${{ secrets.PRODUCTION_DATABASE_CONNECTION_STRING }}
+        run: |
+          set -euo pipefail
+          migration_script="deployment-artifacts/migrations/migrations-idempotent.sql"
+          if [ ! -s "$migration_script" ]; then
+            echo "::error title=Missing migration SQL::The generated migration SQL artifact is missing or empty."
+            exit 1
+          fi
+
+          echo "Production migration started."
+          dotnet run --project scripts/deploy/SqlScriptRunner/SqlScriptRunner.csproj --configuration Release -- "$migration_script"
+          echo "Production migration succeeded."
 
       - name: Run configured production deployment
         if: ${{ inputs.deployment_mode == 'deploy' }}

@@ -84,6 +84,7 @@ The workflow:
 7. Builds the production backend Docker image to validate the Dockerfile.
 8. Uploads backend, frontend, and migration artifacts.
 9. Enters the protected `production` environment for the deployment gate.
+10. In deploy mode only, executes the idempotent migration SQL against the production database before rolling out the application.
 
 ## Linux VPS deployment target
 
@@ -93,7 +94,7 @@ The deploy step calls:
 scripts/deploy/production-vps-deploy.sh
 ```
 
-In `validate-only` mode, the workflow builds and packages everything but does not connect to the VPS. In `deploy` mode, the script:
+In `validate-only` mode, the workflow builds and packages everything but does not connect to the VPS and does not modify the production database. In `deploy` mode, the deployment gate first executes the generated migration SQL successfully, then the VPS script:
 
 1. Packages the existing backend, frontend, and migration artifacts.
 2. Adds the production Docker Compose files.
@@ -132,15 +133,17 @@ On the server:
 
 ## Migration handling
 
-The workflow generates an idempotent SQL migration script and uploads it as an artifact. The VPS deploy script also uploads the script with the release package under `migrations/migrations-idempotent.sql`, but it does not automatically mutate the production database.
+The workflow generates an idempotent SQL migration script and uploads it as an artifact. In `deploy` mode, before the VPS rollout starts, the workflow verifies that the generated SQL artifact exists, is non-empty, and executes it against `PRODUCTION_DATABASE_CONNECTION_STRING`.
+
+If migration execution fails, the workflow fails immediately and the VPS deployment step is not run. Secret values and the database connection string are not printed.
 
 Recommended order for an operator-controlled deployment:
 
 1. Review the generated migration SQL artifact.
-2. Back up the production database.
-3. Apply the migration using the approved production database process.
-4. Deploy the backend revision that matches the migration artifact.
-5. Deploy the frontend bundle.
+2. Back up the production database, especially before risky schema changes or large data migrations.
+3. Run the manual workflow in `deploy` mode.
+4. Confirm the migration step succeeds.
+5. Confirm the VPS Docker Compose rollout succeeds.
 6. Run post-deployment verification.
 
 Automatic database downgrade is not implemented. Rollback after a migration may require a forward-fix migration or database restore depending on the change.
