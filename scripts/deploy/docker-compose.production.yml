@@ -1,0 +1,32 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api-runtime
+    image: daily-rental-homes-api:${DEPLOYMENT_COMMIT_SHA:?Set DEPLOYMENT_COMMIT_SHA}
+    restart: unless-stopped
+    env_file:
+      - app.env.production
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "${API_HTTP_PORT:-5099}:8080"
+    volumes:
+      - public-uploads:/app/uploads
+      - private-uploads:/app/private-uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend-runtime
+    image: daily-rental-homes-frontend:${DEPLOYMENT_COMMIT_SHA:?Set DEPLOYMENT_COMMIT_SHA}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_HTTP_PORT:-80}:8080"
+    depends_on:
+      - api
+
+volumes:
+  public-uploads:
+  private-uploads:
