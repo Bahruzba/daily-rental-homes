@@ -13,13 +13,13 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [phone, setPhone] = useState('')
-  const [fullName, setFullName] = useState('')
   const [pin, setPin] = useState('')
   const [mockRole, setMockRole] = useState<AuthRole>('Customer')
   const [otpSent, setOtpSent] = useState(false)
   const [devPin, setDevPin] = useState<string>()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const showDevelopmentMockRole = !isLiveApiEnabled && import.meta.env.DEV
 
   if (session) return <Navigate to={dashboardPath(session.user.role)} replace />
 
@@ -45,7 +45,7 @@ export function LoginPage() {
     setError('')
     setBusy(true)
     try {
-      const nextSession = await verifyOtp({ phone: phone.trim(), pin: pin.trim(), fullName: fullName.trim(), mockRole })
+      const nextSession = await verifyOtp({ phone: phone.trim(), pin: pin.trim(), mockRole })
       setSession(nextSession)
       const requestedPath = (location.state as LoginLocationState | null)?.from
       navigate(requestedPath && requestedPath === dashboardPath(nextSession.user.role) ? requestedPath : dashboardPath(nextSession.user.role), { replace: true })
@@ -70,12 +70,29 @@ export function LoginPage() {
           <form className="auth-card" onSubmit={otpSent ? handleConfirm : handleRequest}>
             <div className="auth-icon">{otpSent ? <KeyRound /> : <Phone />}</div>
             <h2>{otpSent ? 'Kodu təsdiqləyin' : 'Hesaba daxil olun'}</h2>
-            <p>{otpSent ? `${phone} nömrəsinə göndərilən 6 rəqəmli kodu yazın.` : 'Davam etmək üçün məlumatlarınızı daxil edin.'}</p>
+            <p>{otpSent ? `${phone} nömrəsinə göndərilən 6 rəqəmli kodu yazın.` : 'Davam etmək üçün telefon nömrənizi daxil edin.'}</p>
 
-            <label className="auth-field"><span>Ad və soyad</span><input value={fullName} onChange={(event) => setFullName(event.target.value)} maxLength={150} placeholder="Məsələn, Bahruz Əliyev" /></label>
-            <label className="auth-field"><span>Telefon nömrəsi</span><input value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={30} disabled={otpSent} placeholder="+994 50 000 00 00" /></label>
-            {!isLiveApiEnabled && !otpSent && <label className="auth-field"><span>Demo rol</span><select value={mockRole} onChange={(event) => setMockRole(event.target.value as AuthRole)}>{authRoles.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>}
-            {otpSent && <label className="auth-field"><span>OTP kod</span><input inputMode="numeric" autoComplete="one-time-code" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" /></label>}
+            <label className="auth-field">
+              <span>Telefon nömrəsi</span>
+              <input value={phone} onChange={(event) => setPhone(event.target.value)} maxLength={30} disabled={otpSent} placeholder="+994 50 000 00 00" />
+            </label>
+
+            {showDevelopmentMockRole && !otpSent && (
+              <label className="auth-field">
+                <span>Development demo rol</span>
+                <select value={mockRole} onChange={(event) => setMockRole(event.target.value as AuthRole)}>
+                  {authRoles.map((role) => <option key={role} value={role}>{role}</option>)}
+                </select>
+              </label>
+            )}
+
+            {otpSent && (
+              <label className="auth-field">
+                <span>OTP kod</span>
+                <input inputMode="numeric" autoComplete="one-time-code" value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" />
+              </label>
+            )}
+
             {devPin && <div className="demo-notice">Development kodu: <strong>{devPin}</strong></div>}
             {error && <p className="auth-error" role="alert">{error}</p>}
             <button className="button button-primary button-full" disabled={busy}>{busy ? 'Gözləyin…' : otpSent ? <>Daxil ol <ArrowRight size={17} /></> : 'OTP kodu al'}</button>
