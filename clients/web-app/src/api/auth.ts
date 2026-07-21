@@ -74,7 +74,6 @@ export async function requestOtp(phone: string) {
 export async function verifyOtp(input: {
   phone: string
   pin: string
-  fullName?: string
   mockRole: AuthRole
 }): Promise<AuthSession> {
   if (!isLiveApiEnabled) {
@@ -88,7 +87,7 @@ export async function verifyOtp(input: {
       expiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       user: {
         id: input.mockRole === 'Admin' ? 1 : input.mockRole === 'Broker' ? 2 : 3,
-        fullName: input.fullName?.trim() || `Demo ${input.mockRole}`,
+        fullName: `Demo ${input.mockRole}`,
         phone: input.phone.trim(),
         role: input.mockRole,
       },
@@ -99,7 +98,6 @@ export async function verifyOtp(input: {
   const session = await post<AuthSessionApiResponse>('/api/auth/confirm', {
     phone: input.phone,
     pin: input.pin,
-    fullName: input.fullName,
   })
 
   return {
