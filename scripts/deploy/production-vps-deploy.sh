@@ -149,12 +149,20 @@ SSH_OPTS=(
   -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE"
 )
 
+SCP_OPTS=(
+  -i "$KEY_FILE"
+  -P "$VPS_SSH_PORT"
+  -o "BatchMode=yes"
+  -o "StrictHostKeyChecking=yes"
+  -o "UserKnownHostsFile=$KNOWN_HOSTS_FILE"
+)
+
 REMOTE_PACKAGE="/tmp/daily-rental-homes-${DEPLOYMENT_COMMIT_SHA}.tar.gz"
 REMOTE_DEPLOY_DIR="$(quote_remote "$VPS_DEPLOYMENT_DIRECTORY")"
 REMOTE_SHA="$(quote_remote "$DEPLOYMENT_COMMIT_SHA")"
 REMOTE_PACKAGE_QUOTED="$(quote_remote "$REMOTE_PACKAGE")"
 
-scp "${SSH_OPTS[@]}" "$PACKAGE_ARCHIVE" "${VPS_SSH_USER}@${VPS_SSH_HOST}:$REMOTE_PACKAGE"
+scp "${SCP_OPTS[@]}" "$PACKAGE_ARCHIVE" "${VPS_SSH_USER}@${VPS_SSH_HOST}:$REMOTE_PACKAGE"
 
 ssh "${SSH_OPTS[@]}" "${VPS_SSH_USER}@${VPS_SSH_HOST}" "DEPLOY_DIR=$REMOTE_DEPLOY_DIR DEPLOY_SHA=$REMOTE_SHA DEPLOY_PACKAGE=$REMOTE_PACKAGE_QUOTED bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
