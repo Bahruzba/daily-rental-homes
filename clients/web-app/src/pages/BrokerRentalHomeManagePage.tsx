@@ -31,6 +31,9 @@ const emptyForm: BrokerRentalHomePayload = {
   isPublished: false,
 }
 
+const brokerApiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const useLiveBrokerApi = import.meta.env.VITE_USE_LIVE_API === 'true'
+
 export function BrokerRentalHomeManagePage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -42,6 +45,8 @@ export function BrokerRentalHomeManagePage() {
   const [form, setForm] = useState<BrokerRentalHomePayload>(emptyForm)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [mediaBusyId, setMediaBusyId] = useState<number>()
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const [blockBusyId, setBlockBusyId] = useState<number>()
@@ -140,6 +145,42 @@ export function BrokerRentalHomeManagePage() {
     }
   }
 
+  async function deleteHome() {
+    if (!session || isNew) return
+    setDeleting(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (useLiveBrokerApi) {
+        const response = await fetch(`${brokerApiBaseUrl}/api/broker/rental-homes/${homeId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        })
+
+        if (!response.ok) {
+          let message = 'Elan silinmədi.'
+          try {
+            const payload = await response.json() as { error?: string }
+            message = payload.error || message
+          } catch {
+            // Keep the friendly fallback message.
+          }
+          throw new Error(message)
+        }
+      }
+
+      setShowDeleteConfirm(false)
+      setSuccess('Elan silindi.')
+      window.setTimeout(() => navigate('/broker', { replace: true }), 700)
+    } catch (cause) {
+      console.error('Broker rental home delete failed', cause)
+      setError(cause instanceof Error ? cause.message : 'Elan silinmədi.')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     if (!session || isNew) return
     const file = event.target.files?.[0]
@@ -215,7 +256,7 @@ export function BrokerRentalHomeManagePage() {
 
   return <AppLayout><section className="broker-detail-page"><div className="container">
     <Link className="back-link" to="/broker"><ArrowLeft size={16} /> Broker panelinə qayıt</Link>
-    <div className="broker-detail-heading"><div><span className="eyebrow">EV İDARƏETMƏSİ</span><h1>{title}</h1><p>Öz elanınızı yaradın, redaktə edin və şəkilləri idarə edin.</p></div>{!isNew && <div><strong>{form.isPublished ? 'Yayımda' : 'Qaralama'}</strong><button className="button button-ghost" disabled={saving} onClick={() => void togglePublish(!form.isPublished)}>{form.isPublished ? 'Gizlət' : 'Yayımla'}</button></div>}</div>
+    <div className="broker-detail-heading"><div><span className="eyebrow">EV İDARƏETMƏSİ</span><h1>{title}</h1><p>Öz elanınızı yaradın, redaktə edin və şəkilləri idarə edin.</p></div>{!isNew && <div><strong>{form.isPublished ? 'Yayımda' : 'Qaralama'}</strong><button className="button button-ghost" disabled={saving || deleting} onClick={() => void togglePublish(!form.isPublished)}>{form.isPublished ? 'Gizlət' : 'Yayımla'}</button><button className="button button-ghost" disabled={saving || deleting} onClick={() => setShowDeleteConfirm(true)}><Trash2 size={16} /> Sil</button></div>}</div>
     {error && <div className="broker-error" role="alert">{error}</div>}
     {success && <div className="account-success">{success}</div>}
     {loading ? <div className="broker-loading">Ev məlumatı yüklənir…</div> : <div className="broker-property-layout">
@@ -232,12 +273,12 @@ export function BrokerRentalHomeManagePage() {
           <label><span>Qonaq tutumu</span><input required min={1} max={100} type="number" value={form.guestCount} onChange={(event) => update('guestCount', Number(event.target.value))} /></label>
         </div>
         <label className="broker-publish-check"><input type="checkbox" checked={Boolean(form.isPublished)} onChange={(event) => update('isPublished', event.target.checked)} /> <span>Yadda saxlayanda publik siyahıda yayımla</span></label>
-        <button className="button button-primary" disabled={saving}><Save size={16} /> {saving ? 'Saxlanılır…' : 'Yadda saxla'}</button>
+        <button className="button button-primary" disabled={saving || deleting}><Save size={16} /> {saving ? 'Saxlanılır…' : 'Yadda saxla'}</button>
       </form>
       <aside className="broker-media-panel">
         <h2>Şəkillər</h2>
         {isNew ? <p>Əvvəlcə evi yaradın, sonra şəkil əlavə edin.</p> : <>
-          <label className="button button-primary broker-upload-button"><ImagePlus size={16} /> Şəkil yüklə<input type="file" accept="image/jpeg,image/png,image/webp" disabled={saving} onChange={upload} /></label>
+          <label className="button button-primary broker-upload-button"><ImagePlus size={16} /> Şəkil yüklə<input type="file" accept="image/jpeg,image/png,image/webp" disabled={saving || deleting} onChange={upload} /></label>
           <div className="broker-media-list">
             {home?.media.length ? home.media.map((media, index) => <article key={media.id}>
               <button type="button" className="broker-media-thumb" aria-label="Şəkilə böyük bax" onClick={() => setPreviewIndex(index)}>
@@ -258,7 +299,7 @@ export function BrokerRentalHomeManagePage() {
             <label><span>Başlanğıc</span><input type="date" required value={blockForm.startDate} onChange={(event) => setBlockForm((current) => ({ ...current, startDate: event.target.value }))} /></label>
             <label><span>Bitiş</span><input type="date" required value={blockForm.endDate} onChange={(event) => setBlockForm((current) => ({ ...current, endDate: event.target.value }))} /></label>
             <label className="full"><span>Qeyd <em>yalnız broker üçündür</em></span><input maxLength={500} value={blockForm.note} onChange={(event) => setBlockForm((current) => ({ ...current, note: event.target.value }))} /></label>
-            <button className="button button-primary" disabled={saving}><CalendarX size={16} /> Tarixi blokla</button>
+            <button className="button button-primary" disabled={saving || deleting}><CalendarX size={16} /> Tarixi blokla</button>
           </form>
           <div className="broker-media-list">
             {home?.availabilityBlocks.length ? home.availabilityBlocks.map((block) => <article key={block.id}>
@@ -287,5 +328,18 @@ export function BrokerRentalHomeManagePage() {
         </div>
       </div>
     </div> : null}
+    {showDeleteConfirm && <div className="broker-media-preview" role="dialog" aria-modal="true" aria-label="Elanı sil" onClick={() => setShowDeleteConfirm(false)}>
+      <div className="broker-media-preview-card" style={{ width: 'min(430px, 100%)', gridTemplateRows: 'auto' }} onClick={(event) => event.stopPropagation()}>
+        <div style={{ padding: 24, display: 'grid', gap: 14 }}>
+          <h2 style={{ margin: 0 }}>Elanı sil</h2>
+          <p style={{ margin: 0, color: '#982b24', lineHeight: 1.55 }}>Bu elanı silmək istədiyinizə əminsiniz?</p>
+          <strong>{home?.title ?? form.title}</strong>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <button className="button button-ghost" type="button" disabled={deleting} onClick={() => setShowDeleteConfirm(false)}>Ləğv et</button>
+            <button className="button button-ghost" type="button" disabled={deleting} onClick={() => void deleteHome()}><Trash2 size={16} /> {deleting ? 'Silinir…' : 'Sil'}</button>
+          </div>
+        </div>
+      </div>
+    </div>}
   </div></section></AppLayout>
 }
